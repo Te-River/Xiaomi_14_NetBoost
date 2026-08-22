@@ -1,0 +1,55 @@
+name: Build NetBoost kernel modules
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kmi: [ android14-6.1 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Pull DDK image
+        run: |
+          docker pull ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}
+
+      - name: Build kernel modules
+        run: |
+          docker run --rm -v "$PWD":/src -w /src \
+            ghcr.io/ylarod/ddk-min:${{ matrix.kmi }} \
+            bash -c "
+              set -e
+              make -C /src/kernel/netboost_core KDIR=/src/kernel/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
+              make -C /src/kernel/tcp_bbr3 KDIR=/src/kernel/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
+            "
+
+      - name: Package KernelSU module
+        run: |
+          mkdir -p out
+          ( cd module && zip -r ../out/netboost-${{ matrix.kmi }}.zip . )
+          ( cd kernel/netboost_core && zip -j ../../out/netboost-${{ matrix.kmi }}.zip netboost_core.ko )
+          ( cd kernel/tcp_bbr3 && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr3.ko )
+          ls -la out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: netboost-${{ matrix.kmi }}
+          path: out/netboost-${{ matrix.kmi }}.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/netboost-${{ matrix.kmi }}.zip

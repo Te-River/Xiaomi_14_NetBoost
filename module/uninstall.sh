@@ -1,0 +1,25 @@
+#!/system/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# NetBoost uninstaller - Xiaomi 14
+#
+# Unloads the kernel modules (best effort) and restores default TCP settings.
+
+MODDIR="${0%/*}"
+
+# unload modules if loaded
+for m in netboost_core tcp_bbr3; do
+    if lsmod | grep -q "^${m}"; then
+        rmmod "${m}" 2>/dev/null
+    fi
+done
+
+# restore conservative defaults
+echo cubic > /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null
+echo 1 > /proc/sys/net/ipv4/tcp_slow_start_after_idle 2>/dev/null
+echo 0 > /proc/sys/net/ipv4/tcp_no_metrics_save 2>/dev/null
+echo 0 > /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null
+echo 0 > /proc/sys/net/ipv4/tcp_ecn 2>/dev/null
+echo "fq_codel" > /proc/sys/net/core/default_qdisc 2>/dev/null
+
+exit 0

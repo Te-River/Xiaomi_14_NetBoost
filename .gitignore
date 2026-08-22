@@ -1,0 +1,14 @@
+# build artifacts
+out/
+*.ko
+*.mod
+*.mod.c
+*.o
+*.cmd
+Module.symvers
+modules.order
+kernel_config.h
+
+# misc
+*.log
+.DS_Store
