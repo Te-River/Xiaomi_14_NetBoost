@@ -85,27 +85,18 @@
 </div>
 
 <script type="module">
-const MOD = '/data/adb/modules/netboost';
-let api = null, auto = true, busy = false;
+import { exec, toast } from './kernelsu.js';
 
-/* ---- KSU bridge: official kernelsu lib first, raw window.ksu fallback */
-async function loadApi(){
-  if (api) return api;
-  for (const spec of ['kernelsu','/kernelsu','/kernelsu/index.js']){
-    try { const m = await import(spec);
-      if (m && m.exec){ api = m; return api; } } catch(e){}
-  }
-  if (window.ksu && window.ksu.exec){
-    const r = window.ksu.exec; // promise-style on current managers
-    api = { exec:(c)=>Promise.resolve(r(c)), toast:(t)=>{ try{window.ksu.toast(t)}catch(e){} } };
-    return api;
-  }
-  return null;
-}
+const MOD = '/data/adb/modules/netboost';
+let auto = true, busy = false;
+
+/* ---- KSU bridge: vendored official library.
+ * Calls ksu.exec(cmd, options, callbackName) with the proper object
+ * context (never detached - the WebView rejects detached Java-bridge
+ * calls with "can't be invoked on a non-injected object"). */
 async function sh(cmd){
-  const a = await loadApi();
-  if (!a) throw new Error('no-bridge');
-  const { errno, stdout, stderr } = await a.exec(cmd);
+  if (typeof ksu === 'undefined') throw new Error('no-bridge');
+  const { errno, stdout, stderr } = await exec(cmd);
   if (errno !== 0 && !stdout) throw new Error(stderr || ('errno ' + errno));
   return stdout || '';
 }
@@ -153,7 +144,7 @@ echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_kee
   } catch(e){
     const b = document.getElementById('banner');
     if (e.message === 'no-bridge'){
-      b.textContent = '未检测到 KernelSU 接口：请从 KernelSU 管理器的模块页打开本 WebUI（管理器版本需支持 WebUI）。';
+      b.textContent = '未检测到 KernelSU 接口（ksu 对象不存在）：请从 KernelSU 管理器的模块页打开本 WebUI，且管理器需支持模块 WebUI。';
     } else { b.textContent = '命令执行失败：' + e.message; }
     b.style.display = 'block';
   }
@@ -207,13 +198,13 @@ document.body.addEventListener('click', async e => {
     await sh(`MOD=${MOD};
 if [ -w /proc/netboost ]; then echo scenario=${s} > /proc/netboost; else echo ${algos[0]} > /proc/sys/net/ipv4/tcp_congestion_control; fi;
 sh $MOD/update-display.sh ${s} >/dev/null 2>&1`);
-    api && api.toast && api.toast('已切换: ' + (SCN[s]||s));
+    try { toast('已切换: ' + (SCN[s]||s)); } catch(e){}
   } else if (b.dataset.algo){
     const a = b.dataset.algo;
     await sh(`MOD=${MOD};
 if [ -w /proc/netboost ]; then echo algo=${a} > /proc/netboost; else echo ${a} > /proc/sys/net/ipv4/tcp_congestion_control; fi;
 sh $MOD/update-display.sh custom(${a}) >/dev/null 2>&1`);
-    api && api.toast && api.toast('算法: ' + a);
+    try { toast('算法: ' + a); } catch(e){}
   } else if (b.id === 'btnRetry'){
     await runDiag(`MOD=${MOD};
 for m in ${MODS.join(' ')}; do

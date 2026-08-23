@@ -1,6 +1,6 @@
 id=netboost
 name=NetBoost - Xiaomi 14 Kernel Network Accelerator
-version=v2.5.0
-versionCode=206
+version=v2.5.1
+versionCode=207
 author=Te-River
 description=[模式:boost|算法:bbr3|qdisc:fq|LKM:0/4] 小米14内核网络加速(BBRv3+fq+MTU探测+NAT保活+16MB缓冲). 进阶: su -c 'echo scenario=train|crowd|weak|wifi > /proc/netboost'; 重启自动恢复默认boost.

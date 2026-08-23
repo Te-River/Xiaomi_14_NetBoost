@@ -45,7 +45,7 @@
 #include <linux/string.h>
 #include <net/tcp.h>
 
-#define NETBOOST_VERSION	"2.5.0"
+#define NETBOOST_VERSION	"2.5.1"
 #define NETBOOST_PROC_NAME	"netboost"
 #define NETBOOST_SYSCTL_ALGO	"/proc/sys/net/ipv4/tcp_congestion_control"
 /* NOTE: reading tcp_congestion_control returns only the CURRENT default;
