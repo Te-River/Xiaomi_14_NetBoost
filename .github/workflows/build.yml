@@ -13,6 +13,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Required for the Release step to create releases via the default
+    # GITHUB_TOKEN (without this it fails with 403 "Resource not
+    # accessible by integration").
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -62,4 +67,25 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: out/netboost-${{ matrix.kmi }}.zip
+          files: out/netboost-*.zip
+          generate_release_notes: true
+          body: |
+            **NetBoost ${{ github.ref_name }}** — 小米 14（SM8650 / android14-6.1 GKI）内核级网络加速模块
+
+            ### 安装
+            1. 下载下方 `netboost-android14-6.1.zip`
+            2. KernelSU Manager 中安装并重启
+            3. 零配置，装完即生效（BBRv3 + fq + MTU 探测 + NAT 保活 + 16MB 缓冲）
+
+            ### 验证
+            ```bash
+            su -c "cat /proc/netboost"
+            su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
+            ```
+
+            ### 故障排查
+            日志位于 `/data/adb/modules/netboost/netboost.log`
+
+            ---
+
+            ### 变更记录

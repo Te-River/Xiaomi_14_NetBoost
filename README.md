@@ -69,7 +69,7 @@ netboost/
 
 ### 方式三：GitHub Actions
 
-推送到 `main` 分支自动构建；打 `v*` tag 自动发布 Release。
+推送到 `main` 分支自动构建；打 `v*` tag（如 `v2.3.0`）自动构建并发布 Release（附带模块 zip + 自动变更记录）。
 
 ## 安装
 
