@@ -93,11 +93,11 @@ jobs:
             3. 零配置，装完即生效（BBRv3 + fq + MTU 探测 + NAT 保活 + 16MB 缓冲）
 
             ### 验证
-          ```bash
-          su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
-          su -c "/data/adb/modules/netboost/nb.sh status"         # 完整状态
-          ```
-          或在 KernelSU 管理器中打开本模块的 WebUI 查看实时状态。
+            ```bash
+            su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
+            su -c "/data/adb/modules/netboost/nb.sh status"         # 完整状态
+            ```
+            或在 KernelSU 管理器中打开本模块的 WebUI 查看实时状态。
 
             ### 故障排查
             日志位于 `/data/adb/modules/netboost/netboost.log`
