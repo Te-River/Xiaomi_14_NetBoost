@@ -142,6 +142,8 @@ su -c "insmod /data/adb/modules/netboost/kernel/tcp_bbr3.ko"   # 直接看报错
 
   确认是 vermagic 不匹配后，把 `uname -r` 的完整字符串写入仓库 `kernel/TARGET_RELEASE`（或构建时传 `NB_KERNEL_RELEASE=`），重新构建即可；安装时 `customize.sh` 也会自动比对 `BUILD_RELEASE` 并在管理器日志里警告不匹配。
 
+- **当前构建已钉扎**：`kernel/TARGET_RELEASE` = `6.1.138-android14-11-g0c3d559bcd85-ab14529422`（小米 14 官方内核）。**系统 OTA 更新若变更内核版本，`uname -r` 随之改变，模块将无法加载**（管理器显示 `LKM:0/4`）——此时更新 `TARGET_RELEASE` 重新构建即可。容器内构建后会逐一断言四个 `.ko` 的 vermagic，不匹配直接失败，不会发出坏包。
+
 ## 技术要点
 
 - **官方内核只有 reno + cubic**：android14-6.1 的 `gki_defconfig` 与小米 14（shennong）的 `pineapple_GKI.config` 均无任何 `CONFIG_TCP_CONG_*` 条目，BBR/Westwood 都不在官方内核里。本模块自带 BBRv3 + BBRv1 + Westwood+ 三个算法 LKM，开机由 `netboost_core` 注册并选择。
