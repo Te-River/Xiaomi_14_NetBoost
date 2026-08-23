@@ -35,19 +35,22 @@ GKI 内核默认只编译了 CUBIC 等少量 TCP 拥塞控制算法，BBR/Westwo
 ```
 netboost/
 ├── kernel/
-│   ├── netboost_core/     # 管理核心模块：场景切换、算法管理（/proc/netboost）
 │   ├── tcp_bbr3/          # BBRv3 拥塞控制 backport（GPL-2.0，来自 hrimfaxi/tcp_bbr_modules）
 │   ├── tcp_bbr/           # BBRv1（原样移植 android14-6.1 树内 net/ipv4/tcp_bbr.c）
 │   └── tcp_westwood/      # Westwood+（原样移植 android14-6.1 树内 net/ipv4/tcp_westwood.c）
 ├── module/                # KernelSU 模块包
-│   ├── module.prop        # 模块元数据
+│   ├── module.prop        # 模块元数据（描述行 = 实时状态）
 │   ├── customize.sh       # 安装脚本
 │   ├── service.sh         # 开机加载模块+应用场景
+│   ├── nb.sh              # 场景/算法切换 CLI + stock 一键恢复（纯 sysctl）
 │   ├── netboost.conf      # 默认场景配置
+│   ├── webroot/           # KernelSU WebUI
 │   └── uninstall.sh       # 卸载清理
 ├── scripts/build.sh       # 一键构建脚本
 └── docs/                  # 技术文档
 ```
+
+> v2.6.0 起不再有 `netboost_core` 管理模块：其依赖的 `filp_open`/`kernel_read`/`kernel_write` 未被小米 14 官方内核导出（insmod 必失败），场景管理全部移入 `nb.sh`（纯 sysctl，行为完全一致且更透明）。
 
 ## 构建
 
@@ -82,7 +85,7 @@ netboost/
 默认 `boost` 场景开机自动应用：BBRv3 + fq + MTU 黑洞探测 + NAT 保活 + 16MB 缓冲，覆盖地铁/高铁/人群密集/弱信号/家用 WiFi/游戏登录全部场景。想确认生效可验证：
 
 ```bash
-su -c "cat /proc/netboost"
+su -c "/data/adb/modules/netboost/nb.sh status"
 su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
 ```
 
@@ -93,20 +96,28 @@ su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
 ### 切换场景
 
 ```bash
-su -c "echo 'scenario=train' > /proc/netboost"   # 高铁/地铁
-su -c "echo 'scenario=crowd' > /proc/netboost"   # 演唱会/高密度
-su -c "echo 'scenario=weak'  > /proc/netboost"   # 卫生间/弱信号
-su -c "echo 'scenario=wifi'  > /proc/netboost"   # 家用 WiFi
+su -c "/data/adb/modules/netboost/nb.sh train"   # 高铁/地铁
+su -c "/data/adb/modules/netboost/nb.sh crowd"   # 演唱会/高密度
+su -c "/data/adb/modules/netboost/nb.sh weak"    # 卫生间/弱信号
+su -c "/data/adb/modules/netboost/nb.sh wifi"    # 家用 WiFi（原厂保活参数）
 ```
 
 ### 手动切换算法
 
 ```bash
-su -c "echo 'algo=bbr3' > /proc/netboost"
-su -c "echo 'algo=bbr' > /proc/netboost"    # BBRv1，限速路径（如广电）实测备选
-su -c "echo 'algo=cubic' > /proc/netboost"
-su -c "echo 'algo=westwood' > /proc/netboost"
+su -c "/data/adb/modules/netboost/nb.sh algo bbr3"
+su -c "/data/adb/modules/netboost/nb.sh algo bbr"        # BBRv1，限速路径（如广电）实测备选
+su -c "/data/adb/modules/netboost/nb.sh algo cubic"
+su -c "/data/adb/modules/netboost/nb.sh algo westwood"
 ```
+
+### 临时恢复原厂参数（A/B 排查）
+
+```bash
+su -c "/data/adb/modules/netboost/nb.sh stock"   # 恢复本机原厂 sysctl（首次调优前自动备份）
+```
+
+重启或 `nb.sh <场景>` 会重新应用调优。排查"WiFi 变慢 / 支付宝风控是否与模块有关"就用它做对照实验。
 
 BBRv1 内置速率限制探测器，在被 policer 限速的路径上重传率明显低于 BBRv3（吞吐相近）；广电这类互联带宽被压缩的网络建议实测对比（对上行/游戏包效果更直接）。
 
@@ -130,10 +141,10 @@ WebUI 通过 KernelSU 官方 `kernelsu` JS 接口以 root 执行命令，无外�
 KernelSU 管理器中，模块描述的第一段就是实时状态（开机后由 `update-display.sh` 自动写入）：
 
 ```
-[模式:boost|算法:bbr3|qdisc:fq|LKM:4/4] ...
+[模式:boost|算法:bbr3|qdisc:fq|LKM:3/3] ...
 ```
 
-- `LKM:4/4` 表示四个内核模块全部加载成功；显示 `0/4` 或更小 = 模块没加载上（大概率 vermagic 不匹配，见下方故障排查），此时算法切换退化为 sysctl 直写，MTU/保活/缓冲调优不受影响
+- `LKM:3/3` 表示三个算法内核模块全部加载成功；显示 `0/3` 或更小 = 模块没加载上（大概率 vermagic 不匹配，见下方故障排查），此时自动回退 `cubic`，MTU/保活/缓冲调优不受影响
 - 运行时切换场景会同步刷新显示：
 
 ```bash
@@ -143,7 +154,7 @@ su -c /data/adb/modules/netboost/nb.sh status  # 查看实时状态
 
 ## 故障排查
 
-- **`tcp_congestion_control` 显示 cubic / `LKM:0/4`**：内核模块没加载成功。内核要求模块的 vermagic 与设备 `uname -r` **完全一致**，否则 `insmod` 报 `Invalid module format`。诊断：
+- **`tcp_congestion_control` 显示 cubic / `LKM:0/3`**：内核模块没加载成功。内核要求模块的 vermagic 与设备 `uname -r` **完全一致**，否则 `insmod` 报 `Invalid module format`。诊断：
 
 ```bash
 su -c "uname -r"                                    # 设备内核版本
@@ -153,16 +164,22 @@ su -c "insmod /data/adb/modules/netboost/kernel/tcp_bbr3.ko"   # 直接看报错
 
   确认是 vermagic 不匹配后，把 `uname -r` 的完整字符串写入仓库 `kernel/TARGET_RELEASE`（或构建时传 `NB_KERNEL_RELEASE=`），重新构建即可；安装时 `customize.sh` 也会自动比对 `BUILD_RELEASE` 并在管理器日志里警告不匹配。
 
-- **当前构建已钉扎**：`kernel/TARGET_RELEASE` = `6.1.138-android14-11-g0c3d559bcd85-ab14529422`（小米 14 官方内核）。**系统 OTA 更新若变更内核版本，`uname -r` 随之改变，模块将无法加载**（管理器显示 `LKM:0/4`）——此时更新 `TARGET_RELEASE` 重新构建即可。容器内构建后会逐一断言四个 `.ko` 的 vermagic，不匹配直接失败，不会发出坏包。
+- **当前构建已钉扎**：`kernel/TARGET_RELEASE` = `6.1.138-android14-11-g0c3d559bcd85-ab14529422`（小米 14 官方内核）。**系统 OTA 更新若变更内核版本，`uname -r` 随之改变，模块将无法加载**（管理器显示 `LKM:0/3`）——此时更新 `TARGET_RELEASE` 重新构建即可。容器内构建后会逐一断言三个 `.ko` 的 vermagic，不匹配直接失败，不会发出坏包。
+
+- **WiFi 下感觉变慢 / 支付宝等 App 提示网络风险**：
+  - v2.5.x 曾设置 `tcp_no_metrics_save=1`（不复用路径度量），导致每个新连接都完整慢启动，WiFi 下大量短连接（网页/图片/视频分片）会明显变慢。**v2.6.0 已彻底移除该参数**，恢复内核默认的度量缓存。
+  - 支付宝的"网络环境风险"提示基于**出口 IP 信誉/网络环境指纹**判定。本模块不修改 IP/DNS/VPN/TLS，切到移动数据不再提示是因为换了出口 IP——原厂未 root 手机连某些 WiFi 同样会提示。
+  - 拿不准就做对照实验：`nb.sh stock` 恢复原厂参数后重开支付宝复测；若仍提示，则与模块无关。
 
 ## 技术要点
 
-- **官方内核只有 reno + cubic**：android14-6.1 的 `gki_defconfig` 与小米 14（shennong）的 `pineapple_GKI.config` 均无任何 `CONFIG_TCP_CONG_*` 条目，BBR/Westwood 都不在官方内核里。本模块自带 BBRv3 + BBRv1 + Westwood+ 三个算法 LKM，开机由 `netboost_core` 注册并选择。
-- **GKI 符号约束**：`android14-6.1` 内核未向模块导出 `tcp_set_default_congestion_control` 等函数，故 `netboost_core` 通过标准 sysctl 接口（`/proc/sys/net/ipv4/tcp_congestion_control`）切换算法。
-- **算法可用性检测**：`/proc/sys/net/ipv4/tcp_congestion_control` 只返回当前算法，可用算法列表在 `/proc/sys/net/ipv4/tcp_available_congestion_control`（`netboost_core` 用后者判断 `bbr3` 是否已注册）。
+- **官方内核只有 reno + cubic**：android14-6.1 的 `gki_defconfig` 与小米 14（shennong）的 `pineapple_GKI.config` 均无任何 `CONFIG_TCP_CONG_*` 条目，BBR/Westwood 都不在官方内核里。本模块自带 BBRv3 + BBRv1 + Westwood+ 三个算法 LKM，开机由 `service.sh` 加载、`nb.sh` 按场景偏好选择。
+- **纯 sysctl 管理**：`android14-6.1` 内核未向模块导出 `tcp_set_default_congestion_control`（以及 `filp_open` 等文件 I/O），故 v2.6.0 起所有场景/算法管理走标准 sysctl 接口（`/proc/sys/net/ipv4/tcp_congestion_control` 等），由 `nb.sh` 在用户态完成，零内核符号依赖。
+- **算法可用性检测**：可用算法列表在 `/proc/sys/net/ipv4/tcp_available_congestion_control`（`nb.sh` 用它做偏好回退：bbr3 → bbr → cubic）。
+- **原厂快照**：首次调优前 `nb.sh` 把本机所有被改动的 sysctl 备份到 `netboost.orig`，`nb.sh stock` / 卸载脚本据此精确还原，不依赖硬编码的"默认值"。
 - **BBRv3 适配**：`struct bbr`（约 200B）放不进 104B 的 `icsk_ca_priv`，backport 用动态分配解决；探测式兼容层自动适配 5.4~6.6+ 内核。
-- **加载顺序**：算法 LKM（`tcp_bbr3`/`tcp_bbr`/`tcp_westwood`）先加载注册算法，`netboost_core` 最后加载并设默认。
-- **容错**：`.ko` 加载失败时 `service.sh` 会退化为直接 sysctl 写入（尽可能保留调优）；安装包在 CI 中自动校验完整性。
+- **符号裁剪适配**：设备内核的 KMI 裁剪会砍掉构建树里存在的导出符号（`__tcp_send_ack`、`minmax_running_max`、`register_btf_kfunc_id_set`），backport 分别用 deny-list、本地实现、删除调用适配。
+- **容错**：`.ko` 加载失败时自动回退下一个可用算法（最终 cubic），MTU/保活/缓冲调优不受影响；安装包在 CI 中自动校验完整性。
 
 ## 兼容性
 

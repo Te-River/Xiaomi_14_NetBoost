@@ -4,8 +4,8 @@
 # NetBoost installer - Xiaomi 14 (SM8650 / android14-6.1 GKI)
 #
 # This script runs in KernelSU's BusyBox ash (standalone mode).
-# It copies the two kernel modules (.ko) into the module directory and
-# registers them for loading on boot.
+# It extracts the module files and stages the three congestion-control
+# kernel modules (.ko) into the module directory.
 
 SKIPUNZIP=1
 
@@ -37,7 +37,7 @@ cd "${MODPATH}" || abort "cannot enter module dir"
 
 # move bundled .ko files into kernel/ so the module dir stays tidy
 found_ko=0
-for ko in tcp_bbr.ko tcp_westwood.ko tcp_bbr3.ko netboost_core.ko; do
+for ko in tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
     if [ -f "${ko}" ]; then
         cp -f "${ko}" "${KERNEL_DIR}/${ko}"
         rm -f "${ko}"
@@ -45,10 +45,13 @@ for ko in tcp_bbr.ko tcp_westwood.ko tcp_bbr3.ko netboost_core.ko; do
         ui_print "  staged: ${ko}"
     fi
 done
-if [ "${found_ko}" -ne 4 ]; then
+if [ "${found_ko}" -ne 3 ]; then
     ui_print "!! WARNING: kernel modules missing from package"
-    ui_print "!! Re-download the zip; runtime tuning will still apply"
+    ui_print "!! Re-download the zip; sysctl tuning will still apply"
 fi
+
+# remove stale files from a previous version (module update path)
+rm -f "${KERNEL_DIR}/netboost_core.ko" "${MODPATH}/netboost.orig" 2>/dev/null
 
 # --- verify kernel compatibility -----------------------------------
 KREL=$(uname -r)
@@ -85,7 +88,7 @@ set_perm_recursive "${MODPATH}" 0 0 0755 0644
 for s in service.sh uninstall.sh nb.sh update-display.sh; do
     [ -f "${MODPATH}/${s}" ] && set_perm "${MODPATH}/${s}" 0 0 0755
 done
-for ko in netboost_core.ko tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
+for ko in tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
     [ -f "${KERNEL_DIR}/${ko}" ] && set_perm "${KERNEL_DIR}/${ko}" 0 0 0644
 done
 
@@ -96,5 +99,5 @@ fi
 
 ui_print "----------------------------------------"
 ui_print " Install complete. Reboot to activate."
-ui_print " After boot: cat /proc/netboost"
+ui_print " After boot: nb.sh status | nb.sh stock"
 ui_print "----------------------------------------"

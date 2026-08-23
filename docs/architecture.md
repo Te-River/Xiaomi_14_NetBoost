@@ -42,85 +42,73 @@ NetBoost 的目标：以 KernelSU 内核模块（.ko）形式，把 BBRv3 等算
 ┌──────────────────▼──────────────────────────┐
 │           /data/adb/modules/netboost        │
 │  module.prop / customize.sh / service.sh    │
-│  netboost.conf (SCENARIO=wifi)              │
+│  netboost.conf (SCENARIO=boost) / nb.sh     │
 └──────────────────┬──────────────────────────┘
                    │ insmod (开机加载)
 ┌──────────────────▼──────────────────────────┐
-│           tcp_bbr3.ko (BBRv3算法)           │
-│  注册 "bbr3" 拥塞控制算法                    │
+│      tcp_bbr3.ko / tcp_bbr.ko /            │
+│      tcp_westwood.ko (算法提供者)           │
+│  注册 "bbr3" / "bbr" / "westwood"           │
 └──────────────────┬──────────────────────────┘
-                   │ 注册算法
-┌──────────────────▼──────────────────────────┐
-│         netboost_core.ko (管理核心)         │
-│  /proc/netboost 接口                         │
-│  scenario=boost|train|crowd|weak|wifi|game    │
-│  algo=bbr3|cubic|westwood|...               │
-└──────────────────┬──────────────────────────┘
-                   │ 写 sysctl
+                   │ nb.sh 写 sysctl（用户态）
 ┌──────────────────▼──────────────────────────┐
 │  /proc/sys/net/ipv4/tcp_congestion_control  │
 │  (内核标准接口，切换默认算法)                │
 └─────────────────────────────────────────────┘
 ```
 
+> v2.6.0 起**没有管理核心模块**：原 `netboost_core.ko` 依赖的 `filp_open` /
+> `kernel_read` / `kernel_write` 未被小米 14 官方内核导出（insmod 报
+> `Unknown symbol`，必失败），场景/算法管理全部移入 `nb.sh`（纯 sysctl）。
+
 ## 4. 关键技术决策
 
 ### 4.1 GKI 符号约束
 
-调研确认：`android14-6.1` 内核的 `net/ipv4/tcp_cong.c` 只导出了 `tcp_register_congestion_control` / `tcp_unregister_congestion_control` / `tcp_slow_start` 等，**未导出** `tcp_set_default_congestion_control` / `tcp_get_default_congestion_control` / `tcp_get_allowed_congestion_control`。
+调研确认：`android14-6.1` 内核的 `net/ipv4/tcp_cong.c` 只导出了 `tcp_register_congestion_control` / `tcp_unregister_congestion_control` / `tcp_slow_start` 等，**未导出** `tcp_set_default_congestion_control` / `tcp_get_default_congestion_control` / `tcp_get_allowed_congestion_control`；同时内核态文件 I/O（`filp_open` 等）也未导出。
 
-因此 `netboost_core` 不能直接调用这些函数，改为通过**标准 sysctl 接口**（`/proc/sys/net/ipv4/tcp_congestion_control`）切换算法。该接口从内核态可用 `filp_open` + `kernel_read/write` 访问。
+因此算法切换、场景管理一律走**标准 sysctl 接口**（`/proc/sys/net/ipv4/tcp_congestion_control` 等），由 `nb.sh` 在用户态完成，零内核符号依赖。
 
 ### 4.2 BBRv3 适配
 
 `struct bbr`（约 200B）放不进内核标准的 104B `icsk_ca_priv` 私有区。backport 方案：
 - `icsk_ca_priv` 只存一个指针，`bbr_init()` 里 `kzalloc(GFP_ATOMIC)` 动态分配
 - `bbr_release()` 释放，所有回调带 NULL 防护
-- 探测式兼容层（`gen_kconfig.py` + `kapi_checklist`）自动适配 5.4~6.6+ 内核
+- 探测式兼容层（`gen_kconfig.py` + `kapi_checklist` + `kapi_deny`）自动适配 5.4~6.6+ 内核，并屏蔽设备 KMI 已裁剪的符号
 
-### 4.3 加载顺序
+### 4.3 加载顺序与回退
 
-`tcp_bbr3.ko` 必须先于 `netboost_core.ko` 加载。`netboost_core` 加载时会检查 `bbr3` 是否可用，不可用则回退 `bbr` → `cubic`。
+`service.sh` 依次 `insmod` 三个算法 LKM（相互独立，单个失败不影响其它）。随后 `nb.sh apply <场景>` 按偏好选择算法：`bbr3` → `bbr` → `cubic`（依据 `tcp_available_congestion_control`）。模块全部失败时仍保持 cubic，MTU/保活/缓冲调优不受影响。
 
 ## 5. 模块接口
 
-### `/proc/netboost` 读取
+### `nb.sh` CLI（v2.6.0）
 
 ```
-NetBoost v2.1.0 (Xiaomi 14 kernel network accelerator)
-current_algo:   bbr3
-available_algo: bbr3 bbr cubic westwood reno
-kernel:         6.1.138-android14-...
-scenarios:
-  boost  -> bbr3     (all-round zero-config default for CN mobile networks)
-  train  -> bbr3     (high-speed rail/metro: BBRv3 for handover recovery)
-  crowd  -> cubic    (concerts/dense crowds: CUBIC for fairness under overload)
-  weak   -> westwood (weak signal: westwood for wireless random loss)
-  wifi   -> bbr3     (home Wi-Fi: BBRv3 + fq for low bufferbloat latency)
-  game   -> bbr3     (game login; tuning lives in service.sh common block)
 usage:
-  echo "scenario=<boost|train|crowd|weak|wifi|game>" > /proc/netboost
-  echo "algo=<name>" > /proc/netboost
+  nb.sh <boost|train|crowd|weak|wifi|game>   切换场景（运行时，重启恢复 conf 默认）
+  nb.sh algo <bbr3|bbr|westwood|cubic>       手动切换算法
+  nb.sh stock                                恢复本机原厂 sysctl（A/B 测试）
+  nb.sh status                               查看实时状态
 ```
 
-### `/proc/netboost` 写入
+| 场景 | 算法偏好 | qdisc | keepalive |
+|---|---|---|---|
+| `boost` | bbr3→bbr→cubic | fq | 60s/15s/3（对抗 CGNAT） |
+| `train` | bbr3→bbr→cubic | fq | 60s/15s/3 |
+| `crowd` | cubic | fq_codel | 60s/15s/3 |
+| `weak` | westwood→cubic | fq_codel | 60s/15s/3 |
+| `wifi` | bbr3→bbr→cubic | fq | **原厂**（家宽 NAT 无需激进探测） |
+| `game` | bbr3→bbr→cubic | fq | 60s/15s/3 |
 
-| 命令 | 说明 |
-|---|---|
-| `scenario=boost` | 默认全能预设（BBRv3 + fq，零配置推荐） |
-| `scenario=train` | 应用高铁/地铁预设（BBRv3） |
-| `scenario=crowd` | 应用演唱会预设（CUBIC） |
-| `scenario=weak` | 应用弱信号预设（Westwood） |
-| `scenario=wifi` | 应用家用 WiFi 预设（BBRv3 + fq） |
-| `scenario=game` | 游戏登录预设（算法同 boost，专项调优已并入通用配置） |
-| `algo=<name>` | 手动切换算法 |
-| `status` | 查看状态 |
+状态文件：`/data/adb/modules/netboost/scenario`（当前场景，WebUI 读取）；
+原厂快照：`netboost.orig`（首次调优前自动备份，`stock`/卸载据此还原）。
 
 ## 6. 构建流程
 
 ```
 源码 → DDK容器(ghcr.io/ylarod/ddk-min:android14-6.1)
-     → netboost_core.ko + tcp_bbr3.ko
+     → tcp_bbr3.ko + tcp_bbr.ko + tcp_westwood.ko
      → 打包 KernelSU zip (module/ + .ko)
      → out/netboost-android14-6.1.zip
 ```
@@ -131,15 +119,15 @@ DDK 容器携带与 GKI 匹配的内核头文件和 clang 工具链，确保 KMI
 
 ```bash
 # 模块加载
-su -c "lsmod | grep -E 'netboost|tcp_bbr3'"
+su -c "lsmod | grep -E 'netboost|tcp_bbr3|tcp_bbr |tcp_westwood'"
 
 # 算法状态
-su -c "cat /proc/netboost"
+su -c "/data/adb/modules/netboost/nb.sh status"
 su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"
 su -c "cat /proc/sys/net/ipv4/tcp_available_congestion_control"
 
 # 场景切换
-su -c "echo 'scenario=weak' > /proc/netboost"
+su -c "/data/adb/modules/netboost/nb.sh weak"
 
 # 吞吐测试（建议）
 # 安装 iperf3 或使用 Speedtest 对比切换前后

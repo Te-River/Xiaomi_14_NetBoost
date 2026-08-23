@@ -37,8 +37,9 @@
   .note{color:var(--dim);font-size:11.5px;margin-top:6px}
   pre{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;font-size:11.5px;font-family:ui-monospace,Menlo,monospace;overflow:auto;max-height:280px;white-space:pre-wrap;color:#b8c4cf;margin-top:8px}
   #banner{display:none;background:rgba(248,81,73,.12);border:1px solid var(--bad);border-radius:12px;padding:10px 12px;font-size:12.5px;margin-bottom:14px}
+  #stockNote{display:none;background:rgba(210,153,34,.12);border:1px solid var(--warn);border-radius:12px;padding:10px 12px;font-size:12.5px;margin-bottom:14px}
   .sw{display:flex;align-items:center;justify-content:space-between;margin-top:16px;color:var(--dim);font-size:12px}
-  .toggle{width:40px;height:22px;border-radius:12px;background:var(--chip);border:1px solid var(--line);position:relative}
+  .toggle{width:40px;height:22px;border-radius:12px;background:var(--chip);border:1px solid var(--line);position:relative;cursor:pointer}
   .toggle::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dim);transition:.15s}
   .toggle.on::after{left:20px;background:var(--acc)}
   .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:r 1s linear infinite;vertical-align:-2px;margin-right:6px}
@@ -49,6 +50,7 @@
 <h1>NetBoost <span id="ver" style="color:var(--dim);font-size:12px;font-weight:400"></span></h1>
 <div class="sub">小米 14 · android14-6.1 · KernelSU WebUI</div>
 <div id="banner"></div>
+<div id="stockNote">当前处于 <b>原厂参数</b> 模式（A/B 测试临时状态，重启后自动恢复模块调优）。</div>
 
 <div class="grid">
   <div class="card"><div class="k">当前算法</div><div class="v" id="algo">…</div></div>
@@ -61,8 +63,9 @@
 <div class="chips" id="mods"></div>
 <div class="note" id="vermagic"></div>
 
-<h2>切换场景（算法+队列一键组合）</h2>
+<h2>切换场景（算法+队列+保活一键组合）</h2>
 <div class="btns" id="scnBtns"></div>
+<div class="note">wifi 场景使用原厂保活参数（家宽 NAT 无需 60s 探测）；其余场景用 60s 保活对抗运营商 CGNAT。</div>
 
 <h2>切换拥塞控制算法</h2>
 <div class="btns" id="algoBtns"></div>
@@ -77,6 +80,11 @@
   <button id="btnLog">运行日志</button>
   <button id="btnDmesg">内核报错</button>
 </div>
+<div class="row">
+  <button id="btnStock">恢复原厂参数</button>
+  <button id="btnApply">重新应用调优</button>
+</div>
+<div class="note">"恢复原厂参数"用于 A/B 测试（如排查 WiFi 速率/支付宝风控是否与模块有关）：恢复后重开 App 对比，重启或点"重新应用调优"即恢复。</div>
 <pre id="diag" style="display:none"></pre>
 
 <div class="sw">
@@ -103,11 +111,9 @@ async function sh(cmd){
 
 /* ---- state */
 let state = null;
-const SCN = { boost:'全能默认', train:'高铁/地铁', crowd:'演唱会/密集', weak:'弱信号', wifi:'家用WiFi', game:'游戏' };
-const SCN_ALGO = { boost:['bbr3','bbr'], train:['bbr3','bbr'], wifi:['bbr3','bbr'],
-                   game:['bbr3','bbr'], crowd:['cubic'], weak:['westwood','cubic'] };
-const MODS = ['tcp_bbr3','tcp_bbr','tcp_westwood','netboost_core'];
-const MOD_DESC = { tcp_bbr3:'BBRv3', tcp_bbr:'BBRv1', tcp_westwood:'Westwood+', netboost_core:'管理核心' };
+const SCN = { boost:'全能默认', train:'高铁/地铁', crowd:'演唱会/密集', weak:'弱信号', wifi:'家用WiFi', game:'游戏', stock:'原厂(临时)' };
+const MODS = ['tcp_bbr3','tcp_bbr','tcp_westwood'];
+const MOD_DESC = { tcp_bbr3:'BBRv3', tcp_bbr:'BBRv1', tcp_westwood:'Westwood+' };
 
 function section(out, tag){
   const i = out.indexOf('\n='+tag); if (i < 0) return '';
@@ -125,9 +131,9 @@ echo =B; cat $MOD/BUILD_RELEASE 2>/dev/null;
 echo =A; cat /proc/sys/net/ipv4/tcp_congestion_control;
 echo =L; cat /proc/sys/net/ipv4/tcp_available_congestion_control;
 echo =Q; cat /proc/sys/net/core/default_qdisc;
+echo =S; cat $MOD/scenario 2>/dev/null;
 echo =M; for m in ${MODS.join(' ')}; do grep -q "^$m " /proc/modules && echo "$m 1" || echo "$m 0"; done;
-echo =P; cat /proc/netboost 2>/dev/null;
-echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle tcp_no_metrics_save; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)"`);
+echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)"`);
     state = {
       ver:  section('\n'+out,'V').replace('version=',''),
       kern: section('\n'+out,'K'),
@@ -135,8 +141,8 @@ echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_kee
       algo: section('\n'+out,'A'),
       avail:section('\n'+out,'L').split(/\s+/).filter(Boolean),
       qdisc:section('\n'+out,'Q'),
+      scn:  section('\n'+out,'S'),
       mods: Object.fromEntries(section('\n'+out,'M').split('\n').filter(Boolean).map(l=>l.split(' '))),
-      proc: section('\n'+out,'P'),
       tune: Object.fromEntries(section('\n'+out,'T').split('\n').filter(l=>l.includes('=')).map(l=>l.split('='))),
     };
     render();
@@ -157,14 +163,17 @@ function render(){
   const a = document.getElementById('algo');
   a.textContent = S.algo || '未知';
   a.className = 'v ' + (/bbr|westwood/.test(S.algo) ? 'ok' : 'warn');
-  // scenario from /proc/netboost (line "scenario: xxx") else 'boost'
-  const mm = (S.proc||'').match(/scenario:\s*(\w+)/);
-  document.getElementById('scn').textContent = mm ? (SCN[mm[1]]||mm[1]) : (S.proc ? '未知' : '内核核心未加载');
+  // scenario from the module state file (written by nb.sh)
+  const sc = (S.scn||'').trim() || 'boost';
+  const scEl = document.getElementById('scn');
+  scEl.textContent = SCN[sc] || sc;
+  scEl.className = 'v ' + (sc === 'stock' ? 'warn' : 'ok');
+  document.getElementById('stockNote').style.display = sc === 'stock' ? 'block' : 'none';
   document.getElementById('qdisc').textContent = S.qdisc || '-';
   const n = MODS.filter(m=>S.mods[m]==='1').length;
   const lk = document.getElementById('lkm');
-  lk.textContent = n + '/4';
-  lk.className = 'v ' + (n===4?'ok':(n===0?'bad':'warn'));
+  lk.textContent = n + '/3';
+  lk.className = 'v ' + (n===3?'ok':(n===0?'bad':'warn'));
   // module chips
   document.getElementById('mods').innerHTML = MODS.map(m =>
     `<div class="chip ${S.mods[m]==='1'?'on':'off'}">${MOD_DESC[m]}<span style="opacity:.7"> ${m}</span></div>`).join('');
@@ -176,8 +185,8 @@ function render(){
       : `vermagic <span style="color:var(--bad)">不匹配</span>：构建 ${S.built} ≠ 内核 ${S.kern}（模块无法加载）`;
   } else { vm.textContent = ''; }
   // scenario buttons
-  document.getElementById('scnBtns').innerHTML = Object.keys(SCN).map(s =>
-    `<button data-scn="${s}" class="${mm&&mm[1]===s?'active':''}">${s}<br><span style="font-size:11px;color:var(--dim)">${SCN[s]}</span></button>`).join('');
+  document.getElementById('scnBtns').innerHTML = Object.keys(SCN).filter(s=>s!=='stock').map(s =>
+    `<button data-scn="${s}" class="${sc===s?'active':''}">${s}<br><span style="font-size:11px;color:var(--dim)">${SCN[s]}</span></button>`).join('');
   // algo buttons
   const list = ['bbr3','bbr','westwood','cubic'];
   document.getElementById('algoBtns').innerHTML = list.map(x =>
@@ -185,7 +194,7 @@ function render(){
   // tuning table
   const TN = { tcp_mtu_probing:'MTU 黑洞探测', tcp_keepalive_time:'保活间隔(s)', tcp_keepalive_intvl:'保活探测间隔(s)',
                tcp_keepalive_probes:'保活次数', tcp_fastopen:'TCP FastOpen', tcp_slow_start_after_idle:'空闲后慢启动',
-               tcp_no_metrics_save:'不缓存度量', rmem_max:'接收缓冲上限', wmem_max:'发送缓冲上限' };
+               rmem_max:'接收缓冲上限', wmem_max:'发送缓冲上限' };
   document.getElementById('tuning').innerHTML =
     Object.keys(TN).filter(k=>S.tune[k]!==undefined).map(k=>`<tr><td>${TN[k]}</td><td>${S.tune[k]}</td></tr>`).join('');
 }
@@ -194,16 +203,12 @@ function render(){
 document.body.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   if (b.dataset.scn){
-    const s = b.dataset.scn, algos = SCN_ALGO[s];
-    await sh(`MOD=${MOD};
-if [ -w /proc/netboost ]; then echo scenario=${s} > /proc/netboost; else echo ${algos[0]} > /proc/sys/net/ipv4/tcp_congestion_control; fi;
-sh $MOD/update-display.sh ${s} >/dev/null 2>&1`);
+    const s = b.dataset.scn;
+    await sh(`sh ${MOD}/nb.sh ${s}`);
     try { toast('已切换: ' + (SCN[s]||s)); } catch(e){}
   } else if (b.dataset.algo){
     const a = b.dataset.algo;
-    await sh(`MOD=${MOD};
-if [ -w /proc/netboost ]; then echo algo=${a} > /proc/netboost; else echo ${a} > /proc/sys/net/ipv4/tcp_congestion_control; fi;
-sh $MOD/update-display.sh custom(${a}) >/dev/null 2>&1`);
+    await sh(`sh ${MOD}/nb.sh algo ${a}`);
     try { toast('算法: ' + a); } catch(e){}
   } else if (b.id === 'btnRetry'){
     await runDiag(`MOD=${MOD};
@@ -212,13 +217,23 @@ for m in ${MODS.join(' ')}; do
   echo "== insmod $m:"
   insmod $MOD/kernel/$m.ko 2>&1
 done
-echo "== /proc/modules:"; grep -E '^(tcp_bbr3|tcp_bbr|tcp_westwood|netboost_core) ' /proc/modules
+echo "== /proc/modules:"; grep -E '^(tcp_bbr3|tcp_bbr|tcp_westwood) ' /proc/modules
 echo "== dmesg(相关):"; dmesg 2>/dev/null | grep -iE 'netboost|bbr|westwood|unknown symbol|disagrees about version' | tail -n 25`);
     refresh(); return;
   } else if (b.id === 'btnLog'){
     await runDiag(`tail -n 60 ${MOD}/netboost.log 2>/dev/null || echo '(暂无日志)'`); return;
   } else if (b.id === 'btnDmesg'){
     await runDiag(`dmesg 2>/dev/null | grep -iE 'netboost|bbr|westwood|unknown symbol|disagrees about version|module' | tail -n 40 || echo '(dmesg 不可读或无相关记录)'`); return;
+  } else if (b.id === 'btnStock'){
+    await runDiag(`sh ${MOD}/nb.sh stock`);
+    try { toast('已恢复原厂参数（重启后自动恢复调优）'); } catch(e){}
+    refresh(); return;
+  } else if (b.id === 'btnApply'){
+    await runDiag(`s=$(cat ${MOD}/scenario 2>/dev/null);
+case "$s" in boost|train|crowd|weak|wifi|game) ;; *) s=boost ;; esac;
+sh ${MOD}/nb.sh apply "$s"`);
+    try { toast('已重新应用调优'); } catch(e){}
+    refresh(); return;
   } else { return; }
   refresh();
 });
