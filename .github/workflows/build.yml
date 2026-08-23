@@ -42,6 +42,16 @@ jobs:
           ( cd kernel/tcp_bbr3 && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr3.ko )
           ls -la out/
 
+      - name: Verify module zip
+        run: |
+          unzip -l out/netboost-${{ matrix.kmi }}.zip
+          for f in module.prop customize.sh service.sh netboost.conf uninstall.sh \
+                   netboost_core.ko tcp_bbr3.ko; do
+            unzip -l out/netboost-${{ matrix.kmi }}.zip | grep -q " ${f}\$" || {
+              echo "ERROR: ${f} missing from module zip"; exit 1; }
+          done
+          echo "module zip OK"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

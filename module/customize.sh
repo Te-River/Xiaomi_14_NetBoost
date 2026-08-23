@@ -27,20 +27,28 @@ API=$(getprop ro.build.version.sdk)
 ui_print "  Android API level: ${API}"
 
 # --- extract module files ------------------------------------------
+# SKIPUNZIP=1 means KernelSU does NOT auto-extract; we must do it ourselves.
 ui_print "  Extracting files..."
+unzip -o "${ZIPFILE}" -d "${MODPATH}" >/dev/null 2>&1 || \
+    abort "failed to extract module zip"
+
 mkdir -p "${KERNEL_DIR}"
 cd "${MODPATH}" || abort "cannot enter module dir"
 
-# copy .ko files that were bundled into the zip
+# move bundled .ko files into kernel/ so the module dir stays tidy
+found_ko=0
 for ko in netboost_core.ko tcp_bbr3.ko; do
     if [ -f "${ko}" ]; then
         cp -f "${ko}" "${KERNEL_DIR}/${ko}"
-        chmod 644 "${KERNEL_DIR}/${ko}"
+        rm -f "${ko}"
+        found_ko=$((found_ko + 1))
         ui_print "  staged: ${ko}"
-    else
-        ui_print "  warning: ${ko} not found in package"
     fi
 done
+if [ "${found_ko}" -ne 2 ]; then
+    ui_print "!! WARNING: kernel modules missing from package"
+    ui_print "!! Re-download the zip; runtime tuning will still apply"
+fi
 
 # --- verify kernel compatibility -----------------------------------
 KREL=$(uname -r)
@@ -57,6 +65,8 @@ esac
 
 # --- set permissions ------------------------------------------------
 set_perm_recursive "${MODPATH}" 0 0 0755 0644
+set_perm "${MODPATH}/service.sh"    0 0 0755
+set_perm "${MODPATH}/uninstall.sh"  0 0 0755
 set_perm "${KERNEL_DIR}/netboost_core.ko" 0 0 0644
 set_perm "${KERNEL_DIR}/tcp_bbr3.ko" 0 0 0644
 

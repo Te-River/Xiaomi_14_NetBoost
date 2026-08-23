@@ -112,8 +112,10 @@ su -c "echo 'algo=westwood' > /proc/netboost"
 ## 技术要点
 
 - **GKI 符号约束**：`android14-6.1` 内核未向模块导出 `tcp_set_default_congestion_control` 等函数，故 `netboost_core` 通过标准 sysctl 接口（`/proc/sys/net/ipv4/tcp_congestion_control`）切换算法。
+- **算法可用性检测**：`/proc/sys/net/ipv4/tcp_congestion_control` 只返回当前算法，可用算法列表在 `/proc/sys/net/ipv4/tcp_available_congestion_control`（`netboost_core` 用后者判断 `bbr3` 是否已注册）。
 - **BBRv3 适配**：`struct bbr`（约 200B）放不进 104B 的 `icsk_ca_priv`，backport 用动态分配解决；探测式兼容层自动适配 5.4~6.6+ 内核。
 - **加载顺序**：`tcp_bbr3.ko` 必须先于 `netboost_core.ko` 加载，否则 BBRv3 不可用。
+- **容错**：`.ko` 加载失败时 `service.sh` 会退化为直接 sysctl 写入（尽可能保留调优）；安装包在 CI 中自动校验完整性。
 
 ## 兼容性
 

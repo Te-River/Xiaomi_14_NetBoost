@@ -23,6 +23,11 @@ log() {
     echo "[$(date '+%F %T')] $*" >> "${LOG}"
 }
 
+# keep the log bounded (simple rotation: keep last ~64KB)
+if [ -f "${LOG}" ] && [ "$(wc -c < "${LOG}")" -gt 131072 ]; then
+    tail -c 65536 "${LOG}" > "${LOG}.tmp" 2>/dev/null && mv -f "${LOG}.tmp" "${LOG}"
+fi
+
 sysctlw() {
     # sysctlw <path> <value> <label>
     echo "$2" > "$1" 2>>"${LOG}" && log "$3=$2" || log "FAILED $3 ($1)"
@@ -33,14 +38,14 @@ log "=== NetBoost boot service (scenario=${SCENARIO}) ==="
 # --- 1. load kernel modules -----------------------------------------
 # tcp_bbr3.ko must be loaded first so netboost_core can set it as default.
 if [ -f "${KERNEL_DIR}/tcp_bbr3.ko" ]; then
-    if ! lsmod | grep -q '^tcp_bbr3'; then
+    if ! grep -q '^tcp_bbr3 ' /proc/modules 2>/dev/null; then
         insmod "${KERNEL_DIR}/tcp_bbr3.ko" 2>>"${LOG}" && \
             log "loaded tcp_bbr3.ko" || log "FAILED to load tcp_bbr3.ko"
     fi
 fi
 
 if [ -f "${KERNEL_DIR}/netboost_core.ko" ]; then
-    if ! lsmod | grep -q '^netboost_core'; then
+    if ! grep -q '^netboost_core ' /proc/modules 2>/dev/null; then
         insmod "${KERNEL_DIR}/netboost_core.ko" 2>>"${LOG}" && \
             log "loaded netboost_core.ko" || log "FAILED to load netboost_core.ko"
     fi
@@ -58,6 +63,17 @@ if [ -r /proc/netboost ]; then
             ;;
     esac
     cat /proc/netboost >> "${LOG}"
+else
+    # fallback: netboost_core.ko missing/failed - switch algo via sysctl
+    # directly so at least the congestion control change still happens.
+    case "${SCENARIO}" in
+        crowd) NB_ALGO="cubic" ;;
+        weak)  NB_ALGO="westwood" ;;
+        *)     NB_ALGO="bbr3" ;;
+    esac
+    echo "${NB_ALGO}" > /proc/sys/net/ipv4/tcp_congestion_control 2>>"${LOG}" && \
+        log "fallback: algo=${NB_ALGO} via sysctl" || \
+        log "fallback failed: algo ${NB_ALGO} not available"
 fi
 
 # --- 3. common TCP tuning (applies to ALL scenarios, zero-config) ----

@@ -45,9 +45,14 @@
 #include <linux/string.h>
 #include <net/tcp.h>
 
-#define NETBOOST_VERSION	"2.2.0"
+#define NETBOOST_VERSION	"2.3.0"
 #define NETBOOST_PROC_NAME	"netboost"
 #define NETBOOST_SYSCTL_ALGO	"/proc/sys/net/ipv4/tcp_congestion_control"
+/* NOTE: reading tcp_congestion_control returns only the CURRENT default;
+ * the list of registered algorithms lives in tcp_available_congestion_control.
+ */
+#define NETBOOST_SYSCTL_AVAIL	"/proc/sys/net/ipv4/tcp_available_congestion_control"
+#define NETBOOST_SYSCTL_QDISC	"/proc/sys/net/core/default_qdisc"
 
 static struct proc_dir_entry *netboost_proc_entry;
 
@@ -55,13 +60,13 @@ static struct proc_dir_entry *netboost_proc_entry;
 /* sysctl helpers (GKI does not export tcp_set_default_* to modules)  */
 /* ------------------------------------------------------------------ */
 
-static int read_sysctl_algo(char *buf, size_t len)
+static int read_sysctl_file(const char *path, char *buf, size_t len)
 {
 	struct file *f;
 	ssize_t n;
 	int ret = -EIO;
 
-	f = filp_open(NETBOOST_SYSCTL_ALGO, O_RDONLY, 0);
+	f = filp_open(path, O_RDONLY, 0);
 	if (IS_ERR(f))
 		return PTR_ERR(f);
 
@@ -75,21 +80,31 @@ static int read_sysctl_algo(char *buf, size_t len)
 	return ret;
 }
 
-static int write_sysctl_algo(const char *name)
+static int write_sysctl_file(const char *path, const char *value)
 {
 	struct file *f;
 	ssize_t n;
 	int ret = -EIO;
 
-	f = filp_open(NETBOOST_SYSCTL_ALGO, O_WRONLY, 0);
+	f = filp_open(path, O_WRONLY, 0);
 	if (IS_ERR(f))
 		return PTR_ERR(f);
 
-	n = kernel_write(f, name, strlen(name), &f->f_pos);
-	if (n == (ssize_t)strlen(name))
+	n = kernel_write(f, value, strlen(value), &f->f_pos);
+	if (n == (ssize_t)strlen(value))
 		ret = 0;
 	filp_close(f, NULL);
 	return ret;
+}
+
+static int read_sysctl_algo(char *buf, size_t len)
+{
+	return read_sysctl_file(NETBOOST_SYSCTL_ALGO, buf, len);
+}
+
+static int write_sysctl_algo(const char *name)
+{
+	return write_sysctl_file(NETBOOST_SYSCTL_ALGO, name);
 }
 
 static bool algo_available(const char *name)
@@ -97,7 +112,7 @@ static bool algo_available(const char *name)
 	char buf[256] = { 0 };
 	char *p;
 
-	if (read_sysctl_algo(buf, sizeof(buf)) != 0)
+	if (read_sysctl_file(NETBOOST_SYSCTL_AVAIL, buf, sizeof(buf)) != 0)
 		return false;
 
 	/* available algorithms are space-separated in the sysctl */
@@ -118,6 +133,16 @@ static void set_default_algo(const char *name)
 		pr_info("netboost: default congestion control set to %s\n", name);
 	else
 		pr_warn("netboost: failed to set %s as default\n", name);
+}
+
+static void set_default_qdisc(const char *qdisc)
+{
+	/* only affects interfaces created AFTER this write; live interfaces
+	 * keep their current qdisc until the network is re-attached. */
+	if (write_sysctl_file(NETBOOST_SYSCTL_QDISC, qdisc) == 0)
+		pr_info("netboost: default qdisc set to %s\n", qdisc);
+	else
+		pr_warn("netboost: failed to set default qdisc %s\n", qdisc);
 }
 
 static void get_current_algo(char *buf, size_t len)
@@ -163,6 +188,7 @@ static int apply_scenario(const char *name)
 			else
 				pr_warn("netboost: %s not available, keeping current\n",
 					scenarios[i].algo);
+			set_default_qdisc(scenarios[i].qdisc);
 			pr_info("netboost: scenario '%s' applied (%s)\n",
 				name, scenarios[i].desc);
 			return 0;
@@ -182,7 +208,7 @@ static int netboost_show(struct seq_file *m, void *v)
 	int i;
 
 	get_current_algo(cur, sizeof(cur));
-	read_sysctl_algo(avail, sizeof(avail));
+	read_sysctl_file(NETBOOST_SYSCTL_AVAIL, avail, sizeof(avail));
 
 	seq_printf(m, "NetBoost v%s (Xiaomi 14 kernel network accelerator)\n",
 		   NETBOOST_VERSION);
