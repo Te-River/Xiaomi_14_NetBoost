@@ -63,10 +63,28 @@ case "${KREL}" in
         ;;
 esac
 
+# --- vermagic check (module UTS_RELEASE must equal uname -r) --------
+if [ -f "${MODPATH}/BUILD_RELEASE" ]; then
+    BREL="$(head -n1 "${MODPATH}/BUILD_RELEASE" | tr -d '[:space:]')"
+    if [ -n "${BREL}" ] && [ "${BREL}" != "unknown" ]; then
+        if [ "${BREL}" != "${KREL}" ]; then
+            ui_print "!! VERMAGIC MISMATCH:"
+            ui_print "!!   modules built for: ${BREL}"
+            ui_print "!!   device kernel is:  ${KREL}"
+            ui_print "!! insmod will FAIL (Invalid module format)."
+            ui_print "!! Report your 'uname -r' to get a matching build;"
+            ui_print "!! sysctl tuning still applies in the meantime."
+        else
+            ui_print "  OK: vermagic matches device kernel"
+        fi
+    fi
+fi
+
 # --- set permissions ------------------------------------------------
 set_perm_recursive "${MODPATH}" 0 0 0755 0644
-set_perm "${MODPATH}/service.sh"    0 0 0755
-set_perm "${MODPATH}/uninstall.sh"  0 0 0755
+for s in service.sh uninstall.sh nb.sh update-display.sh; do
+    [ -f "${MODPATH}/${s}" ] && set_perm "${MODPATH}/${s}" 0 0 0755
+done
 for ko in netboost_core.ko tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
     [ -f "${KERNEL_DIR}/${ko}" ] && set_perm "${KERNEL_DIR}/${ko}" 0 0 0644
 done

@@ -12,3 +12,6 @@ kernel_config.h
 # misc
 *.log
 .DS_Store
+
+# generated at build time (records the release the .ko vermagic targets)
+module/BUILD_RELEASE

@@ -61,6 +61,10 @@ build_local() {
     make -C "${ROOT}/kernel/tcp_bbr" KDIR="$kdir" "${make_args[@]}" modules
     echo ">> building tcp_westwood"
     make -C "${ROOT}/kernel/tcp_westwood" KDIR="$kdir" "${make_args[@]}" modules
+    # record the release the modules were built against (vermagic check
+    # at install time compares it against the device's `uname -r`)
+    make -s -C "$kdir" kernelrelease > "${ROOT}/module/BUILD_RELEASE" 2>/dev/null \
+        || echo unknown > "${ROOT}/module/BUILD_RELEASE"
 }
 
 build_ddk() {

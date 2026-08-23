@@ -116,4 +116,9 @@ case "${SCENARIO}" in
         ;;
 esac
 
+# --- 5. refresh manager display (live status at the front) ----------
+if [ -f "${MODDIR}/update-display.sh" ]; then
+    sh "${MODDIR}/update-display.sh" "${SCENARIO}" >> "${LOG}" 2>&1
+fi
+
 log "=== NetBoost boot service done ==="

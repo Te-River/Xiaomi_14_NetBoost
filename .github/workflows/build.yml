@@ -53,10 +53,24 @@ jobs:
         run: |
           unzip -l out/netboost-${{ matrix.kmi }}.zip
           for f in module.prop customize.sh service.sh netboost.conf uninstall.sh \
+                   nb.sh update-display.sh BUILD_RELEASE \
                    netboost_core.ko tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
             unzip -l out/netboost-${{ matrix.kmi }}.zip | grep -q " ${f}\$" || {
               echo "ERROR: ${f} missing from module zip"; exit 1; }
           done
+          # If a target device release is pinned, assert every .ko vermagic
+          # equals it (a mismatch means insmod will fail on the device).
+          if [ -s kernel/TARGET_RELEASE ]; then
+            REL="$(tr -d '[:space:]' < kernel/TARGET_RELEASE)"
+            for ko in kernel/*/*.ko; do
+              strings "$ko" | grep -q "vermagic=${REL} " || {
+                echo "ERROR: vermagic of ${ko} != ${REL}"; exit 1; }
+            done
+            echo "all modules pinned to ${REL}"
+          else
+            echo "NOTE: kernel/TARGET_RELEASE empty - modules carry the ddk"
+            echo "tree release (vermagic will not match any device)."
+          fi
           echo "module zip OK"
 
       - name: Upload artifact

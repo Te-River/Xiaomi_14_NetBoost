@@ -114,6 +114,34 @@ BBRv1 内置速率限制探测器，在被 policer 限速的路径上重传率�
 
 编辑 `/data/adb/modules/netboost/netboost.conf`，改 `SCENARIO=` 后重启。一般不需要动。
 
+## 管理器实时状态显示
+
+KernelSU 管理器中，模块描述的第一段就是实时状态（开机后由 `update-display.sh` 自动写入）：
+
+```
+[模式:boost|算法:bbr3|qdisc:fq|LKM:4/4] ...
+```
+
+- `LKM:4/4` 表示四个内核模块全部加载成功；显示 `0/4` 或更小 = 模块没加载上（大概率 vermagic 不匹配，见下方故障排查），此时算法切换退化为 sysctl 直写，MTU/保活/缓冲调优不受影响
+- 运行时切换场景会同步刷新显示：
+
+```bash
+su -c /data/adb/modules/netboost/nb.sh train   # 切场景
+su -c /data/adb/modules/netboost/nb.sh status  # 查看实时状态
+```
+
+## 故障排查
+
+- **`tcp_congestion_control` 显示 cubic / `LKM:0/4`**：内核模块没加载成功。内核要求模块的 vermagic 与设备 `uname -r` **完全一致**，否则 `insmod` 报 `Invalid module format`。诊断：
+
+```bash
+su -c "uname -r"                                    # 设备内核版本
+su -c "tail -20 /data/adb/modules/netboost/netboost.log"
+su -c "insmod /data/adb/modules/netboost/kernel/tcp_bbr3.ko"   # 直接看报错
+```
+
+  确认是 vermagic 不匹配后，把 `uname -r` 的完整字符串写入仓库 `kernel/TARGET_RELEASE`（或构建时传 `NB_KERNEL_RELEASE=`），重新构建即可；安装时 `customize.sh` 也会自动比对 `BUILD_RELEASE` 并在管理器日志里警告不匹配。
+
 ## 技术要点
 
 - **官方内核只有 reno + cubic**：android14-6.1 的 `gki_defconfig` 与小米 14（shennong）的 `pineapple_GKI.config` 均无任何 `CONFIG_TCP_CONG_*` 条目，BBR/Westwood 都不在官方内核里。本模块自带 BBRv3 + BBRv1 + Westwood+ 三个算法 LKM，开机由 `netboost_core` 注册并选择。

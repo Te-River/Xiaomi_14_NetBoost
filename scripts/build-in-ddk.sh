@@ -35,6 +35,27 @@ export PATH="${CLANG_DIR}:${PATH}"
 echo ">> kdir=${KERNEL_SRC}"
 echo ">> clang=${CLANG_DIR}"
 
+# --- optional vermagic pin -------------------------------------------
+# The kernel enforces exact vermagic: insmod fails with "Invalid module
+# format" unless the module's UTS_RELEASE equals the device's `uname -r`.
+# The ddk tree ships its own release (e.g. "6.1.166-dirty") which matches
+# no real device. Pin the target release via either:
+#   - env NB_KERNEL_RELEASE, or
+#   - a tracked kernel/TARGET_RELEASE file (one line: exact uname -r)
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+NB_KERNEL_RELEASE="${NB_KERNEL_RELEASE:-}"
+if [ -z "${NB_KERNEL_RELEASE}" ] && [ -f "${ROOT}/kernel/TARGET_RELEASE" ]; then
+    NB_KERNEL_RELEASE="$(head -n1 "${ROOT}/kernel/TARGET_RELEASE" | tr -d '[:space:]')"
+fi
+if [ -n "${NB_KERNEL_RELEASE}" ]; then
+    echo "${NB_KERNEL_RELEASE}" > "${KERNEL_SRC}/include/config/kernel.release"
+    printf '#define UTS_RELEASE "%s"\n' "${NB_KERNEL_RELEASE}" \
+        > "${KERNEL_SRC}/include/generated/utsrelease.h"
+    echo ">> vermagic pinned to: ${NB_KERNEL_RELEASE}"
+fi
+echo "${NB_KERNEL_RELEASE:-$(cat "${KERNEL_SRC}/include/config/kernel.release" 2>/dev/null || echo unknown)}" \
+    > "${ROOT}/module/BUILD_RELEASE"
+
 # --- build all modules ----------------------------------------------
 # congestion-control providers first (independent), manager last.
 make -C kernel/netboost_core KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
