@@ -114,6 +114,17 @@ BBRv1 内置速率限制探测器，在被 policer 限速的路径上重传率�
 
 编辑 `/data/adb/modules/netboost/netboost.conf`，改 `SCENARIO=` 后重启。一般不需要动。
 
+## WebUI（管理器内直接打开）
+
+KernelSU 管理器中打开本模块 → 点「WebUI」按钮，即可在图形界面里：
+
+- 查看实时状态：当前算法/场景/qdisc/模块逐个加载状态/vermagic 匹配情况/全部调优参数
+- 一键切换：6 个场景（算法+队列组合）、4 个算法（未注册的自动置灰）
+- 诊断：**重试加载模块**（现场复现 insmod 并显示内核报错）、运行日志、内核日志（unknown symbol / CRC 不匹配等真实原因都在这里）
+- 3 秒自动刷新，可关闭
+
+WebUI 通过 KernelSU 官方 `kernelsu` JS 接口以 root 执行命令，无外部依赖、离线可用。
+
 ## 管理器实时状态显示
 
 KernelSU 管理器中，模块描述的第一段就是实时状态（开机后由 `update-display.sh` 自动写入）：

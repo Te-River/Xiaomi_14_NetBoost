@@ -39,16 +39,32 @@ log "=== NetBoost boot service (scenario=${SCENARIO}) ==="
 # Load order matters: congestion-control providers first (they register
 # "bbr3"/"bbr"/"westwood"), then netboost_core which picks the default.
 # All are independent LKMs; failures degrade gracefully per-module.
+load_failed=0
 for mod in tcp_bbr3 tcp_bbr tcp_westwood netboost_core; do
     if [ -f "${KERNEL_DIR}/${mod}.ko" ]; then
         if ! grep -q "^${mod} " /proc/modules 2>/dev/null; then
             insmod "${KERNEL_DIR}/${mod}.ko" 2>>"${LOG}" && \
-                log "loaded ${mod}.ko" || log "FAILED to load ${mod}.ko"
+                log "loaded ${mod}.ko" || { log "FAILED to load ${mod}.ko"; load_failed=1; }
         fi
     fi
 done
+if [ "${load_failed}" -ne 0 ]; then
+    # insmod only says "failed"; the real reason (unknown symbol / CRC
+    # mismatch) lands in the kernel log - capture it for diagnosis.
+    dmesg 2>/dev/null | grep -iE 'netboost|bbr|westwood|unknown symbol|disagrees about version' \
+        | tail -n 30 >> "${LOG}" 2>/dev/null
+    log "(captured kernel log for failed insmod, see lines above)"
+fi
 
-# --- 2. apply scenario preset (algo switch via kernel module) --------
+# --- 2. apply scenario preset ----------------------------------------
+# Expected algo preference per scenario (first available wins).
+case "${SCENARIO}" in
+    crowd) PREF="cubic" ;;
+    weak)  PREF="westwood cubic" ;;
+    *)     PREF="bbr3 bbr" ;;
+esac
+
+# 2a. let netboost_core apply the preset (algo + qdisc) when present
 if [ -r /proc/netboost ]; then
     case "${SCENARIO}" in
         boost|train|crowd|weak|wifi|game)
@@ -59,19 +75,25 @@ if [ -r /proc/netboost ]; then
             log "unknown scenario '${SCENARIO}', keeping module default"
             ;;
     esac
-    cat /proc/netboost >> "${LOG}"
-else
-    # fallback: netboost_core.ko missing/failed - switch algo via sysctl
-    # directly so at least the congestion control change still happens.
-    case "${SCENARIO}" in
-        crowd) NB_ALGO="cubic" ;;
-        weak)  NB_ALGO="westwood" ;;
-        *)     NB_ALGO="bbr3" ;;
-    esac
-    echo "${NB_ALGO}" > /proc/sys/net/ipv4/tcp_congestion_control 2>>"${LOG}" && \
-        log "fallback: algo=${NB_ALGO} via sysctl" || \
-        log "fallback failed: algo ${NB_ALGO} not available"
 fi
+
+# 2b. verify + repair: if the desired algo did not take effect (e.g. an
+# algo LKM failed to load), pick the best available one directly via
+# sysctl so we still end up on the best achievable algorithm.
+AVAIL="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
+CUR="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
+for a in ${PREF}; do
+    case " ${AVAIL} " in
+        *" ${a} "*)
+            if [ "${a}" != "${CUR}" ]; then
+                echo "${a}" > /proc/sys/net/ipv4/tcp_congestion_control 2>>"${LOG}" && \
+                    log "algo=${a} (set via sysctl verify/repair)" || \
+                    log "FAILED to set algo=${a} via sysctl"
+            fi
+            break
+            ;;
+    esac
+done
 
 # --- 3. common TCP tuning (applies to ALL scenarios, zero-config) ----
 # Disable slow start after idle: keeps throughput after idle periods.

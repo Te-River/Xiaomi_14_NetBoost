@@ -53,7 +53,7 @@ jobs:
         run: |
           unzip -l out/netboost-${{ matrix.kmi }}.zip
           for f in module.prop customize.sh service.sh netboost.conf uninstall.sh \
-                   nb.sh update-display.sh BUILD_RELEASE \
+                   nb.sh update-display.sh webroot/index.html BUILD_RELEASE \
                    netboost_core.ko tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
             unzip -l out/netboost-${{ matrix.kmi }}.zip | grep -q " ${f}\$" || {
               echo "ERROR: ${f} missing from module zip"; exit 1; }
