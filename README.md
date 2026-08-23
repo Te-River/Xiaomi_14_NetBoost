@@ -36,7 +36,9 @@ GKI 内核默认只编译了 CUBIC 等少量 TCP 拥塞控制算法，BBR/Westwo
 netboost/
 ├── kernel/
 │   ├── netboost_core/     # 管理核心模块：场景切换、算法管理（/proc/netboost）
-│   └── tcp_bbr3/          # BBRv3 拥塞控制 backport（GPL-2.0，来自 hrimfaxi/tcp_bbr_modules）
+│   ├── tcp_bbr3/          # BBRv3 拥塞控制 backport（GPL-2.0，来自 hrimfaxi/tcp_bbr_modules）
+│   ├── tcp_bbr/           # BBRv1（原样移植 android14-6.1 树内 net/ipv4/tcp_bbr.c）
+│   └── tcp_westwood/      # Westwood+（原样移植 android14-6.1 树内 net/ipv4/tcp_westwood.c）
 ├── module/                # KernelSU 模块包
 │   ├── module.prop        # 模块元数据
 │   ├── customize.sh       # 安装脚本
@@ -101,9 +103,12 @@ su -c "echo 'scenario=wifi'  > /proc/netboost"   # 家用 WiFi
 
 ```bash
 su -c "echo 'algo=bbr3' > /proc/netboost"
+su -c "echo 'algo=bbr' > /proc/netboost"    # BBRv1，限速路径（如广电）实测备选
 su -c "echo 'algo=cubic' > /proc/netboost"
 su -c "echo 'algo=westwood' > /proc/netboost"
 ```
+
+BBRv1 内置速率限制探测器，在被 policer 限速的路径上重传率明显低于 BBRv3（吞吐相近）；广电这类互联带宽被压缩的网络建议实测对比（对上行/游戏包效果更直接）。
 
 ### 更换开机默认场景
 
@@ -111,10 +116,11 @@ su -c "echo 'algo=westwood' > /proc/netboost"
 
 ## 技术要点
 
+- **官方内核只有 reno + cubic**：android14-6.1 的 `gki_defconfig` 与小米 14（shennong）的 `pineapple_GKI.config` 均无任何 `CONFIG_TCP_CONG_*` 条目，BBR/Westwood 都不在官方内核里。本模块自带 BBRv3 + BBRv1 + Westwood+ 三个算法 LKM，开机由 `netboost_core` 注册并选择。
 - **GKI 符号约束**：`android14-6.1` 内核未向模块导出 `tcp_set_default_congestion_control` 等函数，故 `netboost_core` 通过标准 sysctl 接口（`/proc/sys/net/ipv4/tcp_congestion_control`）切换算法。
 - **算法可用性检测**：`/proc/sys/net/ipv4/tcp_congestion_control` 只返回当前算法，可用算法列表在 `/proc/sys/net/ipv4/tcp_available_congestion_control`（`netboost_core` 用后者判断 `bbr3` 是否已注册）。
 - **BBRv3 适配**：`struct bbr`（约 200B）放不进 104B 的 `icsk_ca_priv`，backport 用动态分配解决；探测式兼容层自动适配 5.4~6.6+ 内核。
-- **加载顺序**：`tcp_bbr3.ko` 必须先于 `netboost_core.ko` 加载，否则 BBRv3 不可用。
+- **加载顺序**：算法 LKM（`tcp_bbr3`/`tcp_bbr`/`tcp_westwood`）先加载注册算法，`netboost_core` 最后加载并设默认。
 - **容错**：`.ko` 加载失败时 `service.sh` 会退化为直接 sysctl 写入（尽可能保留调优）；安装包在 CI 中自动校验完整性。
 
 ## 兼容性

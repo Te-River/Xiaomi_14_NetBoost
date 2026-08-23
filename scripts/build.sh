@@ -57,6 +57,10 @@ build_local() {
     make -C "${ROOT}/kernel/netboost_core" KDIR="$kdir" "${make_args[@]}" modules
     echo ">> building tcp_bbr3"
     make -C "${ROOT}/kernel/tcp_bbr3" KDIR="$kdir" "${make_args[@]}" modules
+    echo ">> building tcp_bbr"
+    make -C "${ROOT}/kernel/tcp_bbr" KDIR="$kdir" "${make_args[@]}" modules
+    echo ">> building tcp_westwood"
+    make -C "${ROOT}/kernel/tcp_westwood" KDIR="$kdir" "${make_args[@]}" modules
 }
 
 build_ddk() {
@@ -86,6 +90,8 @@ pack_module() {
     # add built .ko files
     ( cd "${ROOT}/kernel/netboost_core" && zip -j "${zip}" netboost_core.ko )
     ( cd "${ROOT}/kernel/tcp_bbr3" && zip -j "${zip}" tcp_bbr3.ko )
+    ( cd "${ROOT}/kernel/tcp_bbr" && zip -j "${zip}" tcp_bbr.ko )
+    ( cd "${ROOT}/kernel/tcp_westwood" && zip -j "${zip}" tcp_westwood.ko )
     echo ">> module zip: ${zip}"
 }
 

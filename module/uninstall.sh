@@ -8,9 +8,9 @@
 
 MODDIR="${0%/*}"
 
-# unload modules if loaded
-for m in netboost_core tcp_bbr3; do
-    if lsmod | grep -q "^${m}"; then
+# unload modules if loaded (manager first, then algo providers)
+for m in netboost_core tcp_bbr3 tcp_bbr tcp_westwood; do
+    if grep -q "^${m} " /proc/modules 2>/dev/null; then
         rmmod "${m}" 2>/dev/null
     fi
 done

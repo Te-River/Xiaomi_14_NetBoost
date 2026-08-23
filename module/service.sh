@@ -36,20 +36,17 @@ sysctlw() {
 log "=== NetBoost boot service (scenario=${SCENARIO}) ==="
 
 # --- 1. load kernel modules -----------------------------------------
-# tcp_bbr3.ko must be loaded first so netboost_core can set it as default.
-if [ -f "${KERNEL_DIR}/tcp_bbr3.ko" ]; then
-    if ! grep -q '^tcp_bbr3 ' /proc/modules 2>/dev/null; then
-        insmod "${KERNEL_DIR}/tcp_bbr3.ko" 2>>"${LOG}" && \
-            log "loaded tcp_bbr3.ko" || log "FAILED to load tcp_bbr3.ko"
+# Load order matters: congestion-control providers first (they register
+# "bbr3"/"bbr"/"westwood"), then netboost_core which picks the default.
+# All are independent LKMs; failures degrade gracefully per-module.
+for mod in tcp_bbr3 tcp_bbr tcp_westwood netboost_core; do
+    if [ -f "${KERNEL_DIR}/${mod}.ko" ]; then
+        if ! grep -q "^${mod} " /proc/modules 2>/dev/null; then
+            insmod "${KERNEL_DIR}/${mod}.ko" 2>>"${LOG}" && \
+                log "loaded ${mod}.ko" || log "FAILED to load ${mod}.ko"
+        fi
     fi
-fi
-
-if [ -f "${KERNEL_DIR}/netboost_core.ko" ]; then
-    if ! grep -q '^netboost_core ' /proc/modules 2>/dev/null; then
-        insmod "${KERNEL_DIR}/netboost_core.ko" 2>>"${LOG}" && \
-            log "loaded netboost_core.ko" || log "FAILED to load netboost_core.ko"
-    fi
-fi
+done
 
 # --- 2. apply scenario preset (algo switch via kernel module) --------
 if [ -r /proc/netboost ]; then

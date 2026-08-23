@@ -1,6 +1,6 @@
 id=netboost
 name=NetBoost - Xiaomi 14 Kernel Network Accelerator
-version=v2.3.0
-versionCode=203
+version=v2.4.0
+versionCode=204
 author=Te-River
 description=Kernel-level network protocol optimization for Xiaomi 14 (SM8650, android14-6.1). Zero-config: BBRv3 congestion control + fq qdisc, MTU black-hole probing, NAT keepalive and 16MB buffers applied automatically for CN mobile networks (metro/HSR/crowds/weak signal/Wi-Fi/game login stalls). Advanced per-scenario presets available via /proc/netboost.

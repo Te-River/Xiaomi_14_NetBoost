@@ -45,13 +45,15 @@ jobs:
           ( cd module && zip -r ../out/netboost-${{ matrix.kmi }}.zip . )
           ( cd kernel/netboost_core && zip -j ../../out/netboost-${{ matrix.kmi }}.zip netboost_core.ko )
           ( cd kernel/tcp_bbr3 && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr3.ko )
+          ( cd kernel/tcp_bbr && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr.ko )
+          ( cd kernel/tcp_westwood && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_westwood.ko )
           ls -la out/
 
       - name: Verify module zip
         run: |
           unzip -l out/netboost-${{ matrix.kmi }}.zip
           for f in module.prop customize.sh service.sh netboost.conf uninstall.sh \
-                   netboost_core.ko tcp_bbr3.ko; do
+                   netboost_core.ko tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
             unzip -l out/netboost-${{ matrix.kmi }}.zip | grep -q " ${f}\$" || {
               echo "ERROR: ${f} missing from module zip"; exit 1; }
           done

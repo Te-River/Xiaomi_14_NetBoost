@@ -35,9 +35,15 @@ export PATH="${CLANG_DIR}:${PATH}"
 echo ">> kdir=${KERNEL_SRC}"
 echo ">> clang=${CLANG_DIR}"
 
-# --- build both modules ---------------------------------------------
+# --- build all modules ----------------------------------------------
+# congestion-control providers first (independent), manager last.
 make -C kernel/netboost_core KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
 make -C kernel/tcp_bbr3    KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
+make -C kernel/tcp_bbr     KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
+make -C kernel/tcp_westwood KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
 
 echo ">> in-container build done:"
-ls -l kernel/netboost_core/netboost_core.ko kernel/tcp_bbr3/tcp_bbr3.ko
+ls -l kernel/netboost_core/netboost_core.ko \
+      kernel/tcp_bbr3/tcp_bbr3.ko \
+      kernel/tcp_bbr/tcp_bbr.ko \
+      kernel/tcp_westwood/tcp_westwood.ko
