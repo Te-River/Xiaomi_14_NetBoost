@@ -56,7 +56,7 @@ netboost/
 ./scripts/build.sh --kmi android14-6.1
 ```
 
-需要 docker 或 podman。产物在 `out/netboost-android14-6.1.zip`。
+需要 docker 或 podman。镜像为 `ghcr.io/ylarod/ddk-min:<kmi>-<日期tag>`（默认 `20260313`，可用 `DDK_TAG=` 覆盖），容器内自动探测内核树 `/opt/ddk/kdir/<kmi>` 和 clang 工具链，以 GKI 同款 clang（LLVM=1）编译。产物在 `out/netboost-android14-6.1.zip`。
 
 ### 方式二：本地内核树
 
@@ -64,6 +64,8 @@ netboost/
 ./scripts/build.sh --local
 ./scripts/build.sh --kdir /path/to/kernel
 ```
+
+模块 Makefile 也支持双模式：传 `KDIR=` 走 gcc 经典路径，传 `KERNEL_SRC=... CLANG_DIR=...` 走 clang/DDK 路径。
 
 ### 方式三：GitHub Actions
 

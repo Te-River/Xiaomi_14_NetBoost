@@ -6,6 +6,10 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+env:
+  # Keep in sync with DDK_TAG in scripts/build.sh.
+  DDK_TAG: '20260313'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,22 +21,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Pull DDK image
         run: |
-          docker pull ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}
+          docker pull "ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-${DDK_TAG}"
 
+      # The in-container script auto-detects the kernel tree at
+      # /opt/ddk/kdir/<kmi> and the clang toolchain under /opt/ddk/clang,
+      # then builds both modules with the GKI clang toolchain (LLVM=1).
       - name: Build kernel modules
         run: |
           docker run --rm -v "$PWD":/src -w /src \
-            ghcr.io/ylarod/ddk-min:${{ matrix.kmi }} \
-            bash -c "
-              set -e
-              make -C /src/kernel/netboost_core KDIR=/src/kernel/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
-              make -C /src/kernel/tcp_bbr3 KDIR=/src/kernel/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
-            "
+            "ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-${DDK_TAG}" \
+            bash scripts/build-in-ddk.sh "${{ matrix.kmi }}"
 
       - name: Package KernelSU module
         run: |

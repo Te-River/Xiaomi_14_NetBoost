@@ -19,7 +19,9 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KMI="${KMI:-android14-6.1}"
-DDK_IMAGE="${DDK_IMAGE:-ghcr.io/ylarod/ddk-min:${KMI}}"
+# Dated ddk-min tag for reproducible builds (plain :<kmi> also exists).
+DDK_TAG="${DDK_TAG:-20260313}"
+DDK_IMAGE="${DDK_IMAGE:-ghcr.io/ylarod/ddk-min:${KMI}-${DDK_TAG}}"
 MODE="ddk"
 KDIR=""
 ARCH="arm64"
@@ -35,7 +37,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --local)   MODE="local"; shift ;;
         --kdir)    KDIR="$2"; MODE="local"; shift 2 ;;
-        --kmi)     KMI="$2"; DDK_IMAGE="ghcr.io/ylarod/ddk-min:${KMI}"; shift 2 ;;
+        --kmi)     KMI="$2"; DDK_IMAGE="ghcr.io/ylarod/ddk-min:${KMI}-${DDK_TAG}"; shift 2 ;;
         -h|--help) usage ;;
         *) echo "unknown option: $1"; usage ;;
     esac
@@ -68,13 +70,12 @@ build_ddk() {
         fi
     fi
     echo ">> building via DDK container: ${DDK_IMAGE}"
+    # The in-container script auto-detects the kernel tree at
+    # /opt/ddk/kdir/<kmi> and the clang toolchain under /opt/ddk/clang,
+    # then builds both modules with the GKI clang toolchain (LLVM=1).
     $runner run --rm -v "${ROOT}:/src" -w /src \
         "${DDK_IMAGE}" \
-        bash -c "
-            set -e
-            make -C /src/kernel/netboost_core KDIR=/src/kernel/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
-            make -C /src/kernel/tcp_bbr3 KDIR=/src/kernel/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
-        "
+        bash scripts/build-in-ddk.sh "${KMI}"
 }
 
 pack_module() {
