@@ -6,7 +6,7 @@
 # the Xiaomi shennong fragments), so the "weak signal" scenario needs it
 # shipped as an LKM.
 #
-# Same two build modes as netboost_core:
+# Two build modes (same as tcp_bbr3):
 #   A) DDK mode:   make KERNEL_SRC=... CLANG_DIR=...
 #   B) classic:    make KDIR=... [ARCH=arm64 CROSS_COMPILE=...]
 

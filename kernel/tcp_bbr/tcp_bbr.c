@@ -74,6 +74,50 @@
 #include <linux/random.h>
 #include <linux/win_minmax.h>
 
+/* --------------------------------------------------------------------------
+ * Local copy of the windowed max tracker (lib/win_minmax.c, GPL-2.0).
+ * The kernel's minmax_running_max() is NOT exported to modules on the
+ * android14-6.1 GKI *device* kernel (insmod fails: "Unknown symbol
+ * minmax_running_max"), so we carry the upstream implementation here.
+ * Renamed with an nb_ prefix because win_minmax.h declares the original
+ * name as an extern, which a static definition would clash with.
+ * ------------------------------------------------------------------------ */
+static u32 nb_minmax_subwin_update(struct minmax *m, u32 win,
+				   const struct minmax_sample *val)
+{
+	u32 dt = val->t - m->s[0].t;
+
+	if (unlikely(dt > win)) {
+		m->s[0] = m->s[1];
+		m->s[1] = m->s[2];
+		m->s[2] = *val;
+		if (unlikely(val->t - m->s[0].t > win)) {
+			m->s[0] = m->s[1];
+			m->s[1] = m->s[2];
+			m->s[2] = *val;
+		}
+	} else if (unlikely(m->s[1].t == m->s[0].t) && dt > win/4) {
+		m->s[2] = m->s[1] = *val;
+	} else if (unlikely(m->s[2].t == m->s[1].t) && dt > win/2) {
+		m->s[2] = *val;
+	}
+	return m->s[0].v;
+}
+
+static u32 nb_minmax_running_max(struct minmax *m, u32 win, u32 t, u32 meas)
+{
+	struct minmax_sample val = { .t = t, .v = meas };
+
+	if (unlikely(val.v >= m->s[0].v) ||
+	    unlikely(val.t - m->s[2].t > win))
+		return minmax_reset(m, t, meas);
+	if (unlikely(val.v >= m->s[1].v))
+		m->s[2] = m->s[1] = val;
+	else if (unlikely(val.v >= m->s[2].v))
+		m->s[2] = val;
+	return nb_minmax_subwin_update(m, win, &val);
+}
+
 /* Scale factor for rate in pkt/uSec unit to avoid truncation in bandwidth
  * estimation. The rate unit ~= (1500 bytes / 1 usec / 2^24) ~= 715 bps.
  * This handles bandwidths from 0.06pps (715bps) to 256Mpps (3Tbps) in a u32.
@@ -805,7 +849,7 @@ static void bbr_update_bw(struct sock *sk, const struct rate_sample *rs)
 	 */
 	if (!rs->is_app_limited || bw >= bbr_max_bw(sk)) {
 		/* Incorporate new sample into our max bw filter. */
-		minmax_running_max(&bbr->bw, bbr_bw_rtts, bbr->rtt_cnt, bw);
+		nb_minmax_running_max(&bbr->bw, bbr_bw_rtts, bbr->rtt_cnt, bw);
 	}
 }
 
@@ -1163,35 +1207,17 @@ static struct tcp_congestion_ops tcp_bbr_cong_ops __read_mostly = {
 	.set_state	= bbr_set_state,
 };
 
-BTF_SET8_START(tcp_bbr_check_kfunc_ids)
-#ifdef CONFIG_X86
-#ifdef CONFIG_DYNAMIC_FTRACE
-BTF_ID_FLAGS(func, bbr_init)
-BTF_ID_FLAGS(func, bbr_main)
-BTF_ID_FLAGS(func, bbr_sndbuf_expand)
-BTF_ID_FLAGS(func, bbr_undo_cwnd)
-BTF_ID_FLAGS(func, bbr_cwnd_event)
-BTF_ID_FLAGS(func, bbr_ssthresh)
-BTF_ID_FLAGS(func, bbr_min_tso_segs)
-BTF_ID_FLAGS(func, bbr_set_state)
-#endif
-#endif
-BTF_SET8_END(tcp_bbr_check_kfunc_ids)
-
-static const struct btf_kfunc_id_set tcp_bbr_kfunc_set = {
-	.owner = THIS_MODULE,
-	.set   = &tcp_bbr_check_kfunc_ids,
-};
-
+/* NOTE: upstream bbr_register() also calls register_btf_kfunc_id_set() to
+ * expose BPF struct-ops callbacks. That symbol is NOT exported to modules
+ * on the android14-6.1 GKI *device* kernel (insmod fails: "Unknown symbol
+ * register_btf_kfunc_id_set"), and the upstream kfunc set is empty on
+ * arm64 anyway (all entries are guarded by CONFIG_X86) - so it is dropped
+ * entirely. BPF struct_ops attachments to BBR are not supported by this
+ * backport.
+ */
 static int __init bbr_register(void)
 {
-	int ret;
-
 	BUILD_BUG_ON(sizeof(struct bbr) > ICSK_CA_PRIV_SIZE);
-
-	ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &tcp_bbr_kfunc_set);
-	if (ret < 0)
-		return ret;
 	return tcp_register_congestion_control(&tcp_bbr_cong_ops);
 }
 

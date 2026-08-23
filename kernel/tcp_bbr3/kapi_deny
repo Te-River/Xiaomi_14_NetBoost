@@ -1,0 +1,15 @@
+# gen_kconfig.py deny list for tcp_bbr3.
+#
+# Force-undef these macros even when the compile probe PASSES. Rationale:
+# the probe builds against the ddk GKI tree, whose Module.symvers contains
+# these symbols - but the *device* kernel trims exports to its KMI list, so
+# modules referencing them fail at insmod with "Unknown symbol" (err -2).
+#
+# One macro name per line; lines starting with '#' are comments.
+#
+# Evidence (Xiaomi 14 stock kernel 6.1.138-android14-11, dmesg):
+#   tcp_bbr3: Unknown symbol __tcp_send_ack (err -2)
+# Without it bbr_compat.h degrades gracefully to flagging ACK_NOW/CWR
+# (DCTCP-style immediate-ACK on ECN state change only - cosmetic).
+
+HAVE___TCP_SEND_ACK

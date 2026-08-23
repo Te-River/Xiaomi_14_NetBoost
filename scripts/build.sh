@@ -3,8 +3,8 @@
 #
 # NetBoost build script - Xiaomi 14 (SM8650 / android14-6.1 GKI)
 #
-# Builds the two kernel modules (netboost_core.ko + tcp_bbr3.ko) and packs
-# them into a KernelSU flashable module zip.
+# Builds the three algorithm LKMs (tcp_bbr3.ko + tcp_bbr.ko +
+# tcp_westwood.ko) and packs them into a KernelSU flashable module zip.
 #
 # Usage:
 #   ./scripts/build.sh                 # build via DDK container (recommended)
@@ -53,8 +53,6 @@ build_local() {
     else
         echo ">> building against $kdir (arch=native)"
     fi
-    echo ">> building netboost_core"
-    make -C "${ROOT}/kernel/netboost_core" KDIR="$kdir" "${make_args[@]}" modules
     echo ">> building tcp_bbr3"
     make -C "${ROOT}/kernel/tcp_bbr3" KDIR="$kdir" "${make_args[@]}" modules
     echo ">> building tcp_bbr"
@@ -92,7 +90,6 @@ pack_module() {
     mkdir -p "${OUT_DIR}"
     ( cd "${ROOT}/module" && zip -r "${zip}" . -x '*.DS_Store' )
     # add built .ko files
-    ( cd "${ROOT}/kernel/netboost_core" && zip -j "${zip}" netboost_core.ko )
     ( cd "${ROOT}/kernel/tcp_bbr3" && zip -j "${zip}" tcp_bbr3.ko )
     ( cd "${ROOT}/kernel/tcp_bbr" && zip -j "${zip}" tcp_bbr.ko )
     ( cd "${ROOT}/kernel/tcp_westwood" && zip -j "${zip}" tcp_westwood.ko )

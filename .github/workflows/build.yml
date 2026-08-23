@@ -43,7 +43,6 @@ jobs:
         run: |
           mkdir -p out
           ( cd module && zip -r ../out/netboost-${{ matrix.kmi }}.zip . )
-          ( cd kernel/netboost_core && zip -j ../../out/netboost-${{ matrix.kmi }}.zip netboost_core.ko )
           ( cd kernel/tcp_bbr3 && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr3.ko )
           ( cd kernel/tcp_bbr && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr.ko )
           ( cd kernel/tcp_westwood && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_westwood.ko )
@@ -54,7 +53,7 @@ jobs:
           unzip -l out/netboost-${{ matrix.kmi }}.zip
           for f in module.prop customize.sh service.sh netboost.conf uninstall.sh \
                    nb.sh update-display.sh webroot/index.html webroot/kernelsu.js BUILD_RELEASE \
-                   netboost_core.ko tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
+                   tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
             unzip -l out/netboost-${{ matrix.kmi }}.zip | grep -q " ${f}\$" || {
               echo "ERROR: ${f} missing from module zip"; exit 1; }
           done
@@ -94,10 +93,11 @@ jobs:
             3. 零配置，装完即生效（BBRv3 + fq + MTU 探测 + NAT 保活 + 16MB 缓冲）
 
             ### 验证
-            ```bash
-            su -c "cat /proc/netboost"
-            su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
-            ```
+          ```bash
+          su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
+          su -c "/data/adb/modules/netboost/nb.sh status"         # 完整状态
+          ```
+          或在 KernelSU 管理器中打开本模块的 WebUI 查看实时状态。
 
             ### 故障排查
             日志位于 `/data/adb/modules/netboost/netboost.log`

@@ -100,15 +100,16 @@ echo "${NB_KERNEL_RELEASE:-$(cat "${KERNEL_SRC}/include/config/kernel.release" 2
     > "${ROOT}/module/BUILD_RELEASE"
 
 # --- build all modules ----------------------------------------------
-# congestion-control providers first (independent), manager last.
-make -C kernel/netboost_core KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
+# Three congestion-control provider LKMs. (The former netboost_core
+# manager module was removed: its file-I/O helpers - filp_open /
+# kernel_read / kernel_write - are not exported by the device kernel,
+# so it could never insmod there. All management now lives in shell.)
 make -C kernel/tcp_bbr3    KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
 make -C kernel/tcp_bbr     KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
 make -C kernel/tcp_westwood KERNEL_SRC="${KERNEL_SRC}" CLANG_DIR="${CLANG_DIR}" modules
 
 echo ">> in-container build done:"
-ls -l kernel/netboost_core/netboost_core.ko \
-      kernel/tcp_bbr3/tcp_bbr3.ko \
+ls -l kernel/tcp_bbr3/tcp_bbr3.ko \
       kernel/tcp_bbr/tcp_bbr.ko \
       kernel/tcp_westwood/tcp_westwood.ko
 
@@ -117,8 +118,7 @@ ls -l kernel/netboost_core/netboost_core.ko \
 # did not take effect for every module.
 if [ -n "${NB_KERNEL_RELEASE:-}" ]; then
     bad=0
-    for ko in kernel/netboost_core/netboost_core.ko \
-              kernel/tcp_bbr3/tcp_bbr3.ko \
+    for ko in kernel/tcp_bbr3/tcp_bbr3.ko \
               kernel/tcp_bbr/tcp_bbr.ko \
               kernel/tcp_westwood/tcp_westwood.ko; do
         vm="$(grep -aoE 'vermagic=[^ ]* [^ ]*' "${ko}" | head -1 || true)"

@@ -165,13 +165,40 @@ clean:
                 apis.append(line)
         return apis
 
+    def read_deny_list(self):
+        """Macros that must stay undefined regardless of probe outcome.
+
+        The compile probe verifies a symbol exists in the build tree's
+        headers/symvers, but the *device* kernel may trim the export from
+        its KMI list - such modules fail at insmod with "Unknown symbol".
+        A sibling file `kapi_deny` next to the api list file carries those
+        device-verified cases; each line is a bare macro name.
+        """
+        deny_path = os.path.join(
+            os.path.dirname(os.path.abspath(self.api_list_file)), 'kapi_deny')
+        denied = set()
+        if os.path.isfile(deny_path):
+            with open(deny_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        denied.add(line)
+        return denied
+
     def generate_config_header(self):
         apis = self.read_api_list()
+        denied = self.read_deny_list()
         results = {}
+
+        def work(api):
+            macro = api.rsplit('//', 1)[1].strip()
+            if macro in denied:
+                return macro, f"/* #undef {macro} (deny-listed: not exported by the target device kernel) */"
+            return self.process_api(api)
 
         if self.mp:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.mp) as ex:
-                futs = {ex.submit(self.process_api, api): api for api in apis}
+                futs = {ex.submit(work, api): api for api in apis}
                 for fut in concurrent.futures.as_completed(futs):
                     api = futs[fut]
                     try:
@@ -182,7 +209,7 @@ clean:
                         sys.exit(1)
         else:
             for api in apis:
-                name, line = self.process_api(api)
+                name, line = work(api)
                 results[name] = line
 
         # Keep checklist order so the generated file is deterministic.

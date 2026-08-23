@@ -7,7 +7,7 @@
 # rate-limit detector behaves better than BBRv3 on policed paths
 # (e.g. narrow carrier peering), which makes it a useful A/B option.
 #
-# Same two build modes as netboost_core:
+# Two build modes (same as tcp_bbr3):
 #   A) DDK mode:   make KERNEL_SRC=... CLANG_DIR=...
 #   B) classic:    make KDIR=... [ARCH=arm64 CROSS_COMPILE=...]
 
