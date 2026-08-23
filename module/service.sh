@@ -11,8 +11,8 @@ KERNEL_DIR="${MODDIR}/kernel"
 CONF="${MODDIR}/netboost.conf"
 LOG="${MODDIR}/netboost.log"
 
-# default scenario if no config file: wifi (safe for most users)
-SCENARIO="wifi"
+# default scenario if no config file: boost (all-round for CN mobile networks)
+SCENARIO="boost"
 
 # load user config if present
 if [ -f "${CONF}" ]; then
@@ -21,6 +21,11 @@ fi
 
 log() {
     echo "[$(date '+%F %T')] $*" >> "${LOG}"
+}
+
+sysctlw() {
+    # sysctlw <path> <value> <label>
+    echo "$2" > "$1" 2>>"${LOG}" && log "$3=$2" || log "FAILED $3 ($1)"
 }
 
 log "=== NetBoost boot service (scenario=${SCENARIO}) ==="
@@ -41,10 +46,10 @@ if [ -f "${KERNEL_DIR}/netboost_core.ko" ]; then
     fi
 fi
 
-# --- 2. apply scenario preset ---------------------------------------
+# --- 2. apply scenario preset (algo switch via kernel module) --------
 if [ -r /proc/netboost ]; then
     case "${SCENARIO}" in
-        train|crowd|weak|wifi)
+        boost|train|crowd|weak|wifi|game)
             echo "scenario=${SCENARIO}" > /proc/netboost 2>>"${LOG}" && \
                 log "applied scenario=${SCENARIO}" || log "FAILED to apply scenario"
             ;;
@@ -55,38 +60,46 @@ if [ -r /proc/netboost ]; then
     cat /proc/netboost >> "${LOG}"
 fi
 
-# --- 3. TCP stack tuning (safe values) ------------------------------
+# --- 3. common TCP tuning (applies to ALL scenarios, zero-config) ----
 # Disable slow start after idle: keeps throughput after idle periods.
-echo 0 > /proc/sys/net/ipv4/tcp_slow_start_after_idle 2>>"${LOG}" && \
-    log "tcp_slow_start_after_idle=0"
+sysctlw /proc/sys/net/ipv4/tcp_slow_start_after_idle 0 tcp_slow_start_after_idle
 
-# Do not save metrics: avoids stale RTT/cwnd from previous connections.
-echo 1 > /proc/sys/net/ipv4/tcp_no_metrics_save 2>>"${LOG}" && \
-    log "tcp_no_metrics_save=1"
+# Do not save metrics: avoids stale RTT/cwnd from previous connections
+# (important after base-station handover).
+sysctlw /proc/sys/net/ipv4/tcp_no_metrics_save 1 tcp_no_metrics_save
 
 # TCP Fast Open: shave one RTT off repeat connections.
-echo 3 > /proc/sys/net/ipv4/tcp_fastopen 2>>"${LOG}" && \
-    log "tcp_fastopen=3"
+sysctlw /proc/sys/net/ipv4/tcp_fastopen 3 tcp_fastopen
 
-# Explicit Congestion Notification (works well with BBRv3).
-echo 1 > /proc/sys/net/ipv4/tcp_ecn 2>>"${LOG}" && \
-    log "tcp_ecn=1"
+# MTU black-hole probing: if an intermediate hop drops large packets
+# (CGNAT / roaming paths), fall back to a smaller MSS instead of stalling.
+# Fixes the "stuck at game login, works when there is an update" pattern.
+sysctlw /proc/sys/net/ipv4/tcp_mtu_probing 1 tcp_mtu_probing
 
-# Increase socket receive/send buffer defaults for higher throughput.
-echo "262144 524288 4194304" > /proc/sys/net/ipv4/tcp_rmem 2>>"${LOG}" && \
-    log "tcp_rmem tuned"
-echo "262144 524288 4194304" > /proc/sys/net/ipv4/tcp_wmem 2>>"${LOG}" && \
-    log "tcp_wmem tuned"
+# Aggressive TCP keepalive: keep NAT/conntrack mappings alive so sessions
+# are not silently dropped by short CGNAT timeouts (common on roaming MVNOs).
+sysctlw /proc/sys/net/ipv4/tcp_keepalive_time 60 tcp_keepalive_time
+sysctlw /proc/sys/net/ipv4/tcp_keepalive_intvl 15 tcp_keepalive_intvl
+sysctlw /proc/sys/net/ipv4/tcp_keepalive_probes 3 tcp_keepalive_probes
 
-# BBR works best with fq qdisc (pacing). Apply per scenario.
+# Socket buffers: raise the ceiling so a high-BDP path (5G / wide-area
+# peering) can actually fill its window instead of being capped.
+sysctlw /proc/sys/net/ipv4/tcp_rmem "262144 524288 16777216" tcp_rmem
+sysctlw /proc/sys/net/ipv4/tcp_wmem "262144 524288 16777216" tcp_wmem
+sysctlw /proc/sys/net/core/rmem_max 16777216 rmem_max
+sysctlw /proc/sys/net/core/wmem_max 16777216 wmem_max
+
+# NOTE: tcp_ecn intentionally left at kernel default. CN carrier middleboxes
+# frequently blackhole ECN-marked packets; forcing ECN on causes stalls.
+
+# --- 4. qdisc per scenario -------------------------------------------
+# BBR needs fq for pacing; fq_codel suits loss-driven algos.
 case "${SCENARIO}" in
-    train|wifi)
-        echo fq > /proc/sys/net/core/default_qdisc 2>>"${LOG}" && \
-            log "default_qdisc=fq"
+    boost|train|wifi|game)
+        sysctlw /proc/sys/net/core/default_qdisc fq default_qdisc
         ;;
     crowd|weak)
-        echo fq_codel > /proc/sys/net/core/default_qdisc 2>>"${LOG}" && \
-            log "default_qdisc=fq_codel"
+        sysctlw /proc/sys/net/core/default_qdisc fq_codel default_qdisc
         ;;
 esac
 

@@ -45,7 +45,7 @@
 #include <linux/string.h>
 #include <net/tcp.h>
 
-#define NETBOOST_VERSION	"2.1.0"
+#define NETBOOST_VERSION	"2.2.0"
 #define NETBOOST_PROC_NAME	"netboost"
 #define NETBOOST_SYSCTL_ALGO	"/proc/sys/net/ipv4/tcp_congestion_control"
 
@@ -138,14 +138,18 @@ struct netboost_scenario {
 };
 
 static const struct netboost_scenario scenarios[] = {
-	{ "train", "bbr3",   "fq",
+	{ "boost", "bbr3",     "fq",
+	  "all-round default for CN mobile networks: BBRv3 + fq" },
+	{ "train", "bbr3",     "fq",
 	  "high-speed rail/metro: BBRv3 for handover recovery" },
-	{ "crowd", "cubic",   "fq_codel",
+	{ "crowd", "cubic",    "fq_codel",
 	  "concerts/dense crowds: CUBIC for fairness under overload" },
 	{ "weak",  "westwood", "fq_codel",
 	  "weak signal: westwood for wireless random loss" },
-	{ "wifi",  "bbr3",    "fq",
+	{ "wifi",  "bbr3",     "fq",
 	  "home Wi-Fi: BBRv3 + fq for low bufferbloat latency" },
+	{ "game",  "bbr3",     "fq",
+	  "game login/latency: BBRv3 + keepalive + big buffers (sysctl part in service.sh)" },
 };
 
 static int apply_scenario(const char *name)
@@ -191,7 +195,7 @@ static int netboost_show(struct seq_file *m, void *v)
 			   scenarios[i].name, scenarios[i].algo,
 			   scenarios[i].desc);
 	seq_puts(m, "usage:\n");
-	seq_printf(m, "  echo \"scenario=<train|crowd|weak|wifi>\" > %s\n",
+	seq_printf(m, "  echo \"scenario=<boost|train|crowd|weak|wifi|game>\" > %s\n",
 		   NETBOOST_PROC_NAME);
 	seq_printf(m, "  echo \"algo=<name>\" > %s\n", NETBOOST_PROC_NAME);
 	return 0;

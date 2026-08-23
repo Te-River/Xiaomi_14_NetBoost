@@ -1,6 +1,6 @@
 id=netboost
 name=NetBoost - Xiaomi 14 Kernel Network Accelerator
-version=v1.0.0
-versionCode=100
+version=v1.1.0
+versionCode=101
 author=Te-River
-description=Kernel-level network protocol optimization for Xiaomi 14 (SM8650, android14-6.1). Loads BBRv3 congestion control + netboost_core manager, tunes TCP stack for lower latency and higher throughput on Wi-Fi/5G.
+description=Kernel-level network protocol optimization for Xiaomi 14 (SM8650, android14-6.1). BBRv3 congestion control + scenario-aware manager (boost/train/crowd/weak/wifi/game), MTU probing, keepalive and buffer tuning for CN mobile networks. Use SCENARIO=game for game login stalls on narrow-peering carriers.

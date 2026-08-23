@@ -53,7 +53,7 @@ NetBoost 的目标：以 KernelSU 内核模块（.ko）形式，把 BBRv3 等算
 ┌──────────────────▼──────────────────────────┐
 │         netboost_core.ko (管理核心)         │
 │  /proc/netboost 接口                         │
-│  scenario=train|crowd|weak|wifi             │
+│  scenario=boost|train|crowd|weak|wifi|game    │
 │  algo=bbr3|cubic|westwood|...               │
 └──────────────────┬──────────────────────────┘
                    │ 写 sysctl
@@ -92,12 +92,14 @@ current_algo:   bbr3
 available_algo: bbr3 bbr cubic westwood reno
 kernel:         6.1.138-android14-...
 scenarios:
+  boost  -> bbr3     (all-round zero-config default for CN mobile networks)
   train  -> bbr3     (high-speed rail/metro: BBRv3 for handover recovery)
   crowd  -> cubic    (concerts/dense crowds: CUBIC for fairness under overload)
   weak   -> westwood (weak signal: westwood for wireless random loss)
   wifi   -> bbr3     (home Wi-Fi: BBRv3 + fq for low bufferbloat latency)
+  game   -> bbr3     (game login; tuning lives in service.sh common block)
 usage:
-  echo "scenario=<train|crowd|weak|wifi>" > /proc/netboost
+  echo "scenario=<boost|train|crowd|weak|wifi|game>" > /proc/netboost
   echo "algo=<name>" > /proc/netboost
 ```
 
@@ -105,10 +107,12 @@ usage:
 
 | 命令 | 说明 |
 |---|---|
+| `scenario=boost` | 默认全能预设（BBRv3 + fq，零配置推荐） |
 | `scenario=train` | 应用高铁/地铁预设（BBRv3） |
 | `scenario=crowd` | 应用演唱会预设（CUBIC） |
 | `scenario=weak` | 应用弱信号预设（Westwood） |
 | `scenario=wifi` | 应用家用 WiFi 预设（BBRv3 + fq） |
+| `scenario=game` | 游戏登录预设（算法同 boost，专项调优已并入通用配置） |
 | `algo=<name>` | 手动切换算法 |
 | `status` | 查看状态 |
 
