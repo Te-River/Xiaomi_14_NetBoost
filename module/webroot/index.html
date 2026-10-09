@@ -285,6 +285,7 @@ if [ -s $DATA/cellmap.csv ]; then
   sort -t, -k3 -nr $DATA/cellmap.csv | head -n 20
   echo "…共 $(wc -l < $DATA/cellmap.csv) 行 (仅显示 weak_hits 前 20)"
 else echo "(空 - 尚未学习到任何小区)"; fi;
+[ -s $DATA/diag_dump.txt ] && { echo; echo "== 信号字段原始样本(解析失败时自动抓取, 截图发开发者可精准适配):"; head -c 1200 $DATA/diag_dump.txt; }
 echo; echo "== 运行状态:"; sh ${MOD}/lingxi.sh status`); return;
   } else if (b.id === 'btnLxReset'){
     await runDiag(`sh ${MOD}/lingxi.sh reset-map`);

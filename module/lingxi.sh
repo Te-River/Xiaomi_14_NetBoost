@@ -83,10 +83,11 @@ rsrp_of() {
     t=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
     for pat in 'mNrRsrp=[-0-9]+' 'mLteRsrp=[-0-9]+' \
                'rsrp[= ][ ]*[-0-9]+' 'dbm[= ][ ]*[-0-9]+'; do
-        v=$(echo "${t}" | grep -m1 -ioE "${pat}" | grep -oE '[-0-9]+$')
-        # RSRP/dbm are always negative; a positive value is the AOSP
-        # "unknown" sentinel (Integer.MAX_VALUE) -- skip it
-        case "${v}" in -*) echo "${v}"; return 0 ;; esac
+        # iterate ALL matches: on dual-SIM phones the first entry can be
+        # the IDLE SIM's "unknown" sentinel (2147483647) - keep scanning
+        for v in $(echo "${t}" | grep -ioE "${pat}" | grep -oE '[-0-9]+$'); do
+            case "${v}" in -*) echo "${v}"; return 0 ;; esac
+        done
     done
     return 0
 }
@@ -100,10 +101,24 @@ cell_of() {
     for pat in 'mNci=[0-9a-fA-F]+' 'mCi=[0-9a-fA-F]+' \
                'nci=[0-9a-fA-F]+' '\bci=[0-9a-fA-F]+' \
                'mCid=[0-9a-fA-F]+' 'cid=[0-9a-fA-F]+'; do
-        v=$(echo "${t}" | grep -m1 -ioE "${pat}" | grep -oE '[0-9a-fA-F]+$')
-        [ -n "${v}" ] && { echo "${v}"; return 0; }
+        for v in $(echo "${t}" | grep -ioE "${pat}" | grep -oE '[0-9a-fA-F]+$'); do
+            # skip the unknown sentinel and placeholder -1
+            [ "${v}" != "2147483647" ] && [ "${v}" != "-1" ] && [ -n "${v}" ] && \
+                { echo "${v}"; return 0; }
+        done
     done
     return 0
+}
+
+# 原始样本回写: 字段名因 ROM/版本而异, 猜不如抓。学习库为空时把
+# telephony.registry 的关键原始行落盘, 供 WebUI"学习库明细"展示,
+# 用于按真实格式修正解析 (限 4KB, 仅在 cellmap 尚未建立时写一次)。
+DIAG="${DATA_DIR}/diag_dump.txt"
+diag_dump() {
+    [ -s "${DIAG}" ] && return 0
+    timeout 4 dumpsys telephony.registry 2>/dev/null \
+        | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id|ServiceState' \
+        | head -c 4096 > "${DIAG}" 2>/dev/null
 }
 
 wifi_rssi_of() {
@@ -252,6 +267,16 @@ decide() {
     fi
 
     prev_rsrp="${rsrp}"; prev_cell="${cellid}"
+
+    # persist candidate transitions immediately. Previously the state file
+    # was written only on actual scenario switches, so the WebUI panel
+    # showed a STALE candidate - e.g. lingering "wifi" long after leaving
+    # Wi-Fi (worsened by the pre-v2.7.4 blind RSRP parsing, when蜂窝判定
+    # never produced a new candidate at all).
+    if [ "${last_cand}" != "${written_cand}" ]; then
+        write_state
+        written_cand="${last_cand}"
+    fi
 }
 
 write_state() {
@@ -265,7 +290,7 @@ EOF
 
 # ---------------------------------------------------------------- main loop
 run_loop() {
-    current=""; last_cand=""; cand_streak=0
+    current=""; last_cand=""; cand_streak=0; written_cand=""
     drops=0; switches=0; window_start=$(date +%s)
     prev_rsrp=""; prev_cell=""; rtt=0; loss=0; rssi=""
     recov_cd=0; last_rtt_probe=0
@@ -276,6 +301,7 @@ run_loop() {
     since=$(date +%s)
     write_state
     log "daemon started (base=${current}, map=$( [ -s "${MAP}" ] && wc -l < "${MAP}" || echo 0) cells)"
+    [ -s "${MAP}" ] || diag_dump
 
     while :; do
         if screen_on; then interval="${LINGXI_INTERVAL_ON}"

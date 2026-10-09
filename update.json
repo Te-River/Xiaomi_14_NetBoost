@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.6",
-  "versionCode": 215,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.6/netboost-android14-6.1.zip",
-  "changelog": "v2.7.6 CRITICAL: fix v2.7.5 WebUI regression (duplicate runDiag declaration killed the whole page - all cards stuck at '...', all buttons dead); CI now syntax-checks WebUI JS in ES-module mode; v2.7.5 fixes (uninstall kills supervisor group, stock warning, daemon re-entry guard) retained"
+  "version": "v2.7.7",
+  "versionCode": 216,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.7/netboost-android14-6.1.zip",
+  "changelog": "v2.7.7: live candidate in WebUI (state used to be written only on switches - stale 'wifi' shown after leaving Wi-Fi); dual-SIM aware RSRP/cell parsing (skips idle SIM's 2147483647 sentinel); auto-capture raw telephony dump to netboost_data/diag_dump.txt when learning is empty, shown under WebUI button for exact field adaptation"
 }
