@@ -323,10 +323,14 @@ case "$1" in
         run_loop &
         echo $! > "${PIDF}"
         echo "started (pid $(cat "${PIDF}"))"
+        # sync module.prop desc so the KSU manager shows 灵犀:on
+        [ -f "${MODDIR}/update-display.sh" ] && sh "${MODDIR}/update-display.sh" >/dev/null 2>&1
         ;;
     stop)
         [ -f "${PIDF}" ] && kill "$(cat "${PIDF}")" 2>/dev/null
-        rm -f "${PIDF}"; echo stopped ;;
+        rm -f "${PIDF}"; echo stopped
+        # sync module.prop desc so the KSU manager shows 灵犀:off
+        [ -f "${MODDIR}/update-display.sh" ] && sh "${MODDIR}/update-display.sh" >/dev/null 2>&1 ;;
     once)
         iface=$(iface_of)
         if is_wifi "${iface}"; then
