@@ -35,13 +35,19 @@ export PATH="${CLANG_DIR}:${PATH}"
 echo ">> kdir=${KERNEL_SRC}"
 echo ">> clang=${CLANG_DIR}"
 
-# --- optional vermagic pin -------------------------------------------
-# The kernel enforces exact vermagic: insmod fails with "Invalid module
-# format" unless the module's UTS_RELEASE equals the device's `uname -r`.
-# The ddk tree ships its own release (e.g. "6.1.166-dirty") which matches
-# no real device. Pin the target release via either:
-#   - env NB_KERNEL_RELEASE, or
-#   - a tracked kernel/TARGET_RELEASE file (one line: exact uname -r)
+# --- build baseline release ------------------------------------------
+# MODVERSIONS fact (kernel/module/version.c: same_magic()): for modules
+# carrying __crc_* sections, insmod only compares the FLAGS part of the
+# vermagic ("SMP preempt mod_unload modversions aarch64"); the
+# UTS_RELEASE string is NOT compared - ABI compatibility is enforced by
+# symbol CRCs instead. Net effect: one .ko build loads on ALL
+# 6.1.x-android14 kernels (any sublevel, any -gHASH-abSTAMP suffix).
+#
+# We still pin the release (via NB_KERNEL_RELEASE or kernel/
+# TARGET_RELEASE) because the ddk tree ships its own release (e.g.
+# "6.1.166-dirty") and a clean, GKI-shaped release string keeps the
+# artifacts reproducible and readable - it is just no longer a
+# load-time requirement.
 #
 # kbuild recomputes include/config/kernel.release on external module
 # builds (VERSION/PATCHLEVEL/SUBLEVEL from the top Makefile + CONFIG_
@@ -87,14 +93,15 @@ if [ -n "${NB_KERNEL_RELEASE}" ]; then
         echo "${NB_KERNEL_RELEASE}" > "${KERNEL_SRC}/include/config/kernel.release"
         printf '#define UTS_RELEASE "%s"\n' "${NB_KERNEL_RELEASE}" \
             > "${KERNEL_SRC}/include/generated/utsrelease.h"
-        echo ">> vermagic pinned to: ${NB_KERNEL_RELEASE}"
+        echo ">> build baseline release: ${NB_KERNEL_RELEASE}"
     else
         echo "ERROR: cannot parse release '${NB_KERNEL_RELEASE}'" >&2
         exit 1
     fi
 else
-    echo ">> WARNING: no TARGET_RELEASE pinned - modules will carry the ddk" >&2
-    echo ">> tree release and insmod will fail on any real device." >&2
+    echo ">> WARNING: no TARGET_RELEASE pinned - modules will carry the" >&2
+    echo ">> ddk tree release (still loadable: only vermagic FLAGS are" >&2
+    echo ">> compared for MODVERSIONS modules, but keep it tidy)." >&2
 fi
 echo "${NB_KERNEL_RELEASE:-$(cat "${KERNEL_SRC}/include/config/kernel.release" 2>/dev/null || echo unknown)}" \
     > "${ROOT}/module/BUILD_RELEASE"
@@ -114,25 +121,27 @@ ls -l kernel/tcp_bbr3/tcp_bbr3.ko \
       kernel/tcp_westwood/tcp_westwood.ko
 
 # --- post-build vermagic assertion ----------------------------------
-# Fail inside the container (clear error, no broken zip) if the pin
-# did not take effect for every module.
-if [ -n "${NB_KERNEL_RELEASE:-}" ]; then
-    bad=0
-    for ko in kernel/tcp_bbr3/tcp_bbr3.ko \
-              kernel/tcp_bbr/tcp_bbr.ko \
-              kernel/tcp_westwood/tcp_westwood.ko; do
-        vm="$(grep -aoE 'vermagic=[^ ]* [^ ]*' "${ko}" | head -1 || true)"
-        case "${vm}" in
-            "vermagic=${NB_KERNEL_RELEASE} "*)
-                echo ">> OK: ${ko}: ${vm}"
-                ;;
-            *)
-                echo "ERROR: vermagic mismatch for ${ko}" >&2
-                echo "       got:  ${vm:-<none>}" >&2
-                echo "       want: vermagic=${NB_KERNEL_RELEASE} ..." >&2
-                bad=1
-                ;;
-        esac
-    done
-    [ "${bad}" -eq 0 ] || exit 1
-fi
+# Assert the vermagic FLAGS match the GKI standard and the release is a
+# 6.1.x string. Per kernel/module/version.c: same_magic(), MODVERSIONS
+# modules are compared on flags only, so matching flags + a 6.1 release
+# prefix == loadable on ALL 6.1.x-android14 kernels (CRC-backed).
+GKI_FLAGS="SMP preempt mod_unload modversions aarch64"
+bad=0
+for ko in kernel/tcp_bbr3/tcp_bbr3.ko \
+          kernel/tcp_bbr/tcp_bbr.ko \
+          kernel/tcp_westwood/tcp_westwood.ko; do
+    vm="$(strings "${ko}" | grep '^vermagic=' | head -1 || true)"
+    case "${vm}" in
+        "vermagic=6.1."*" ${GKI_FLAGS}")
+            echo ">> OK: ${ko} (flags = GKI, release-agnostic)"
+            echo ">>     ${vm}"
+            ;;
+        *)
+            echo "ERROR: vermagic flags mismatch for ${ko}" >&2
+            echo "       got:  ${vm:-<none>}" >&2
+            echo "       want: vermagic=6.1.* ${GKI_FLAGS}" >&2
+            bad=1
+            ;;
+    esac
+done
+[ "${bad}" -eq 0 ] || exit 1
