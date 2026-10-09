@@ -22,8 +22,14 @@ QD="$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 MODS="$(grep -cE '^(tcp_bbr3|tcp_bbr|tcp_westwood) ' /proc/modules 2>/dev/null)"
 case "${MODS}" in ''|*[!0-9]*) MODS=0 ;; esac
 
+# LingXi daemon status (v2.7.0+): on = auto-scenario engine running
+LX="off"
+if [ -f "${MODDIR}/lingxi.pid" ] && kill -0 "$(cat "${MODDIR}/lingxi.pid")" 2>/dev/null; then
+    LX="on"
+fi
+
 # NOTE: keep this string free of '#' and '&' (sed replacement safety).
-DESC="[模式:${SC}|算法:${ALGO}|qdisc:${QD}|LKM:${MODS}/3] 小米14内核网络加速(BBRv3+fq+MTU探测+NAT保活+16MB缓冲). 进阶: su -c '/data/adb/modules/netboost/nb.sh wifi' 切场景, nb.sh stock 临时恢复原厂(A/B测试); 重启自动恢复netboost.conf默认."
+DESC="[模式:${SC}|算法:${ALGO}|qdisc:${QD}|LKM:${MODS}/3|灵犀:${LX}] 小米14内核网络加速+灵犀式自动场景(RSRP预判/小区学习/快速回网/场景择优). nb.sh wifi 手动切场景, lingxi.sh status 查看自动判定, nb.sh stock 恢复原厂."
 
 sed -i "s#^description=.*#description=${DESC}#" "${MODDIR}/module.prop" 2>/dev/null
 echo "netboost display: ${SC} / ${ALGO}+${QD} / LKM ${MODS}/3"
