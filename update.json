@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.5",
-  "versionCode": 214,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.5/netboost-android14-6.1.zip",
-  "changelog": "v2.7.5: WebUI buttons fixed (runDiag was never defined - lingxi start/stop/map/reset, log, dmesg, stock, apply were all dead); uninstall now kills the whole supervisor process group; nb.sh stock warns about a live LingXi daemon; daemon re-entry guard; v2.7.4: fix blind RSRP/cell parsing (AOSP prints mLteRsrp/mCi -- old case-sensitive match never saw them); v2.7.3: daemon keepalive"
+  "version": "v2.7.6",
+  "versionCode": 215,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.6/netboost-android14-6.1.zip",
+  "changelog": "v2.7.6 CRITICAL: fix v2.7.5 WebUI regression (duplicate runDiag declaration killed the whole page - all cards stuck at '...', all buttons dead); CI now syntax-checks WebUI JS in ES-module mode; v2.7.5 fixes (uninstall kills supervisor group, stock warning, daemon re-entry guard) retained"
 }

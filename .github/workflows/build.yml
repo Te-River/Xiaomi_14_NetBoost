@@ -48,6 +48,21 @@ jobs:
           ( cd kernel/tcp_westwood && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_westwood.ko )
           ls -la out/
 
+      - name: Syntax-check WebUI JS (ES module mode)
+        run: |
+          # v2.7.5 regression guard: plain `node --check` treats the file as
+          # a classic script where duplicate function declarations are legal;
+          # the WebView loads it as type="module" (strict mode) where they
+          # are a fatal SyntaxError that blanks the entire WebUI.
+          python3 -c "
+          import re
+          h = open('module/webroot/index.html').read()
+          s = re.search(r'<script[^>]*>(.*)</script>', h, re.S).group(1)
+          open('/tmp/webui.mjs','w').write(s)
+          "
+          node --input-type=module --check /tmp/webui.mjs
+          echo "WebUI module JS OK"
+
       - name: Verify module zip
         run: |
           unzip -l out/netboost-${{ matrix.kmi }}.zip
