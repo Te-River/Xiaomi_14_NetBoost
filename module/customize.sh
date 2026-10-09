@@ -53,39 +53,43 @@ fi
 # remove stale files from a previous version (module update path)
 rm -f "${KERNEL_DIR}/netboost_core.ko" "${MODPATH}/netboost.orig" 2>/dev/null
 
-# --- verify kernel compatibility -----------------------------------
+# --- kernel compatibility (MODVERSIONS facts, v2.7.0) -----------------
+# kernel/module/version.c: same_magic() only compares the FLAGS part of
+# vermagic for MODVERSIONS modules ("SMP preempt mod_unload modversions
+# aarch64"); the UTS_RELEASE string is NOT compared - ABI compatibility
+# is backed by symbol CRCs instead. Therefore the bundled .ko works on
+# ALL 6.1.x-android14 kernels (6.1.138 included) as long as the flags
+# match. CRC mismatch (KMI-breaking custom kernels) degrades gracefully:
+# nb.sh falls back to cubic and sysctl tuning still applies.
 KREL=$(uname -r)
 ui_print "  kernel: ${KREL}"
 case "${KREL}" in
-    *android14-6.1*|6.1.*)
-        ui_print "  OK: android14-6.1 GKI kernel detected"
+    *android14-6.1*)
+        ui_print "  OK: android14-6.1 GKI kernel"
+        ui_print "  (release-agnostic: works on all 6.1.x-android14)"
+        ;;
+    6.1.*)
+        ui_print "  OK: 6.1 GKI kernel; LKM flags may or may not match -"
+        ui_print "  if LKM count shows 0/3 after boot, sysctl tuning still applies"
         ;;
     *)
-        ui_print "  warning: kernel release may not be android14-6.1"
-        ui_print "  module was built for android14-6.1 (6.1.x)"
+        ui_print "  warning: kernel is not 6.1.x-android14; LKMs likely won't"
+        ui_print "  load (CRC mismatch) - sysctl tuning still applies"
         ;;
 esac
 
-# --- vermagic check (module UTS_RELEASE must equal uname -r) --------
+# informational: the release this build was produced against
 if [ -f "${MODPATH}/BUILD_RELEASE" ]; then
     BREL="$(head -n1 "${MODPATH}/BUILD_RELEASE" | tr -d '[:space:]')"
     if [ -n "${BREL}" ] && [ "${BREL}" != "unknown" ]; then
-        if [ "${BREL}" != "${KREL}" ]; then
-            ui_print "!! VERMAGIC MISMATCH:"
-            ui_print "!!   modules built for: ${BREL}"
-            ui_print "!!   device kernel is:  ${KREL}"
-            ui_print "!! insmod will FAIL (Invalid module format)."
-            ui_print "!! Report your 'uname -r' to get a matching build;"
-            ui_print "!! sysctl tuning still applies in the meantime."
-        else
-            ui_print "  OK: vermagic matches device kernel"
-        fi
+        ui_print "  built against: ${BREL}"
+        ui_print "  (CRC-backed; exact release match NOT required)"
     fi
 fi
 
 # --- set permissions ------------------------------------------------
 set_perm_recursive "${MODPATH}" 0 0 0755 0644
-for s in service.sh uninstall.sh nb.sh update-display.sh; do
+for s in service.sh uninstall.sh nb.sh update-display.sh lingxi.sh; do
     [ -f "${MODPATH}/${s}" ] && set_perm "${MODPATH}/${s}" 0 0 0755
 done
 for ko in tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
@@ -99,5 +103,5 @@ fi
 
 ui_print "----------------------------------------"
 ui_print " Install complete. Reboot to activate."
-ui_print " After boot: nb.sh status | nb.sh stock"
+ui_print " After boot: nb.sh status | lingxi.sh status"
 ui_print "----------------------------------------"
