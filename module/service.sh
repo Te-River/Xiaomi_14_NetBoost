@@ -59,4 +59,14 @@ fi
 # preference -> qdisc -> common tuning -> scenario file + manager display.
 sh "${MODDIR}/nb.sh" apply "${SCENARIO}" >> "${LOG}" 2>&1
 
+# --- 3. LingXi auto-scenario daemon (v2.7.0+, optional) ---------------
+# 灵犀式场景自适应/自主学习: 采样 RSRP/RTT/小区切换 -> 自动调用 nb.sh
+# 切场景. Set LINGXI_AUTO=0 in netboost.conf to disable; thresholds are
+# also in netboost.conf (LINGXI_*). The daemon itself re-checks
+# LINGXI_ENABLE before forking.
+if [ -f "${MODDIR}/lingxi.sh" ] && [ "${LINGXI_AUTO:-1}" = "1" ]; then
+    log "starting lingxi auto-scenario daemon"
+    sh "${MODDIR}/lingxi.sh" start >> "${LOG}" 2>&1
+fi
+
 log "=== NetBoost boot service done ==="
