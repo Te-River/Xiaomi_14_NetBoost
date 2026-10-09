@@ -52,24 +52,26 @@ jobs:
         run: |
           unzip -l out/netboost-${{ matrix.kmi }}.zip
           for f in module.prop customize.sh service.sh netboost.conf uninstall.sh \
-                   nb.sh update-display.sh webroot/index.html webroot/kernelsu.js BUILD_RELEASE \
-                   tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
+                   nb.sh update-display.sh lingxi.sh webroot/index.html webroot/kernelsu.js \
+                   BUILD_RELEASE tcp_bbr3.ko tcp_bbr.ko tcp_westwood.ko; do
             unzip -l out/netboost-${{ matrix.kmi }}.zip | grep -q " ${f}\$" || {
               echo "ERROR: ${f} missing from module zip"; exit 1; }
           done
-          # If a target device release is pinned, assert every .ko vermagic
-          # equals it (a mismatch means insmod will fail on the device).
-          if [ -s kernel/TARGET_RELEASE ]; then
-            REL="$(tr -d '[:space:]' < kernel/TARGET_RELEASE)"
-            for ko in kernel/*/*.ko; do
-              strings "$ko" | grep -q "vermagic=${REL} " || {
-                echo "ERROR: vermagic of ${ko} != ${REL}"; exit 1; }
-            done
-            echo "all modules pinned to ${REL}"
-          else
-            echo "NOTE: kernel/TARGET_RELEASE empty - modules carry the ddk"
-            echo "tree release (vermagic will not match any device)."
-          fi
+          # MODVERSIONS fact (kernel/module/version.c: same_magic()): for
+          # modules with __crc_* sections, insmod compares only the FLAGS
+          # part of vermagic ("SMP preempt mod_unload modversions aarch64");
+          # the release string is NOT compared (CRC-backed instead). So we
+          # assert flags + a 6.1 release prefix, making one build load on
+          # ALL 6.1.x-android14 kernels (6.1.138 and any later sublevel).
+          GKI_FLAGS="SMP preempt mod_unload modversions aarch64"
+          for ko in kernel/*/*.ko; do
+            vm="$(strings "$ko" | grep '^vermagic=' | head -1)"
+            case "$vm" in
+              "vermagic=6.1."*" ${GKI_FLAGS}") ;;
+              *) echo "ERROR: vermagic flags mismatch in ${ko}: ${vm:-<none>}"; exit 1 ;;
+            esac
+          done
+          echo "all modules release-agnostic: flags = GKI android14-6.1, CRC-backed"
           echo "module zip OK"
 
       - name: Upload artifact
@@ -91,13 +93,19 @@ jobs:
             1. 下载下方 `netboost-android14-6.1.zip`
             2. KernelSU Manager 中安装并重启
             3. 零配置，装完即生效（BBRv3 + fq + MTU 探测 + NAT 保活 + 16MB 缓冲）
+            4. 灵犀式自动场景引擎开机自启：RSRP 弱信号预判 / 小区学习 / 出电梯快速回网 / 场景自动择优
 
             ### 验证
             ```bash
             su -c "cat /proc/sys/net/ipv4/tcp_congestion_control"   # 应显示 bbr3
             su -c "/data/adb/modules/netboost/nb.sh status"         # 完整状态
+            su -c "/data/adb/modules/netboost/lingxi.sh status"     # 灵犀自动场景状态
             ```
             或在 KernelSU 管理器中打开本模块的 WebUI 查看实时状态。
+
+            ### 兼容性
+            MODVERSIONS 机制下 vermagic 仅校验 flags（符号 CRC 兜底 ABI），
+            本构建兼容所有 `6.1.x-android14` 内核（6.1.138 及各 sublevel）。
 
             ### 故障排查
             日志位于 `/data/adb/modules/netboost/netboost.log`
