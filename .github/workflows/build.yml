@@ -60,7 +60,7 @@ jobs:
           s = re.search(r'<script[^>]*>(.*)</script>', h, re.S).group(1)
           open('/tmp/webui.mjs','w').write(s)
           "
-          node --input-type=module --check /tmp/webui.mjs
+          node --input-type=module --check < /tmp/webui.mjs
           echo "WebUI module JS OK"
 
       - name: Verify module zip
