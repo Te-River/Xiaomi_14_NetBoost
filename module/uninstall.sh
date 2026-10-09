@@ -12,6 +12,12 @@
 MODDIR="${0%/*}"
 ORIG="${MODDIR}/netboost.orig"
 
+# stop the LingXi auto-scenario daemon if running
+if [ -f "${MODDIR}/lingxi.pid" ]; then
+    kill "$(cat "${MODDIR}/lingxi.pid")" 2>/dev/null
+    rm -f "${MODDIR}/lingxi.pid"
+fi
+
 # unload modules if loaded (no dependencies between them)
 for m in tcp_westwood tcp_bbr tcp_bbr3; do
     if grep -q "^${m} " /proc/modules 2>/dev/null; then
