@@ -124,6 +124,20 @@ async function sh(cmd){
   return stdout || '';
 }
 
+/* runDiag: run a command and show its output in the #diag <pre>.
+ * (v2.7.5 fix: this function was never defined - every button that
+ * called it (lingxi start/stop/map/reset, log, dmesg, stock, apply,
+ * retry) threw ReferenceError and did nothing.) */
+async function runDiag(cmd){
+  let out;
+  try { out = await sh(cmd); }
+  catch(e){ out = '执行失败: ' + e.message; }
+  const d = document.getElementById('diag');
+  d.textContent = (out || '(无输出)').trim();
+  d.style.display = 'block';
+  try { d.scrollIntoView({behavior:'smooth', block:'nearest'}); } catch(e){}
+}
+
 /* ---- state */
 let state = null;
 const SCN = { boost:'全能默认', train:'高铁/地铁', crowd:'演唱会/密集', weak:'弱信号', wifi:'家用WiFi', game:'游戏', stock:'原厂(临时)' };

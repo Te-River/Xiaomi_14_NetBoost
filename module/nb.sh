@@ -174,6 +174,13 @@ stock() {
         echo "ERROR: netboost.orig not found (tuning never applied)"
         exit 1
     fi
+    # a live LingXi daemon would re-apply its scenario within ~30s and
+    # silently undo this restore - warn the user instead of fighting it
+    if [ -f "${MODDIR}/lingxi.pid" ] \
+       && kill -0 "$(cat "${MODDIR}/lingxi.pid" 2>/dev/null)" 2>/dev/null; then
+        echo "NOTE: LingXi daemon is running and will re-apply a scenario in ~30s."
+        echo "      For a lasting A/B comparison run first:  sh ${MODDIR}/lingxi.sh stop"
+    fi
     while IFS='=' read -r p v; do
         [ -n "${p}" ] || continue
         if echo "${v}" > "/proc/sys/${p}" 2>/dev/null; then

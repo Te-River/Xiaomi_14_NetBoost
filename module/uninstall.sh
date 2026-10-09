@@ -12,9 +12,12 @@
 MODDIR="${0%/*}"
 NB_DATA="/data/adb/netboost_data"
 
-# stop the LingXi auto-scenario daemon if running
+# stop the LingXi auto-scenario daemon if running.
+# v2.7.3+ runs a supervisor process group (setsid): killing the pid alone
+# would leave the engine running as an orphan - kill the whole group.
 if [ -f "${MODDIR}/lingxi.pid" ]; then
-    kill "$(cat "${MODDIR}/lingxi.pid")" 2>/dev/null
+    P=$(cat "${MODDIR}/lingxi.pid")
+    kill -- -"${P}" 2>/dev/null || kill "${P}" 2>/dev/null
     rm -f "${MODDIR}/lingxi.pid"
 fi
 
@@ -52,7 +55,9 @@ else
     restore net/ipv4/tcp_keepalive_time 7200
     restore net/ipv4/tcp_keepalive_intvl 75
     restore net/ipv4/tcp_keepalive_probes 9
-    restore net/ipv4/tcp_rmem "4194304 131072 6291456"
+    # upstream Linux defaults: tcp_rmem is "min default max" -- the old
+    # fallback "4194304 131072 6291456" had min/max swapped (min=4MB!)
+    restore net/ipv4/tcp_rmem "4096 131072 6291456"
     restore net/ipv4/tcp_wmem "4096 16384 4194304"
     restore net/core/rmem_max 212992
     restore net/core/wmem_max 212992

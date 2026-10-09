@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.4",
-  "versionCode": 213,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.4/netboost-android14-6.1.zip",
-  "changelog": "v2.7.4: fix blind RSRP/cell parsing (AOSP prints mLteRsrp/mCi with capital letters -- old case-sensitive match never saw them, so weak-signal engine never fired); v2.7.3: LingXi daemon keepalive (setsid + HUP ignored + auto-restart supervisor + WebUI self-heal; respects manual stop); v2.7.2: fix stale 灵犀 status in module description (KSU manager now syncs on daemon start/stop); v2.7.1: LingXi engine (scene prediction + self-learning cellmap), persistent data dir, WebUI panel, cellmap cap 1024"
+  "version": "v2.7.5",
+  "versionCode": 214,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.5/netboost-android14-6.1.zip",
+  "changelog": "v2.7.5: WebUI buttons fixed (runDiag was never defined - lingxi start/stop/map/reset, log, dmesg, stock, apply were all dead); uninstall now kills the whole supervisor process group; nb.sh stock warns about a live LingXi daemon; daemon re-entry guard; v2.7.4: fix blind RSRP/cell parsing (AOSP prints mLteRsrp/mCi -- old case-sensitive match never saw them); v2.7.3: daemon keepalive"
 }

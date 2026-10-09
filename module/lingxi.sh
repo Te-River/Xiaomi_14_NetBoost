@@ -259,7 +259,7 @@ write_state() {
 scenario=${current}
 since=${since}
 candidate=${last_cand}
-updated=$(date '+%F %T')
+updated="$(date '+%F %T')"
 EOF
 }
 
@@ -360,6 +360,16 @@ case "$1" in
         [ -f "${MODDIR}/update-display.sh" ] && sh "${MODDIR}/update-display.sh" >/dev/null 2>&1 ;;
     __daemon)
         trap '' HUP
+        # re-entry guard: the pid file may briefly hold the (exited)
+        # setsid wrapper pid instead of ours, or start may be invoked
+        # twice while the first supervisor is booting - only one may run
+        OLD="$(cat "${PIDF}" 2>/dev/null)"
+        if [ -n "${OLD}" ] && [ "${OLD}" != "$$" ] \
+           && kill -0 "${OLD}" 2>/dev/null; then
+            log "supervisor already running (pid ${OLD}), exit"
+            exit 0
+        fi
+        echo $$ > "${PIDF}"
         while :; do
             run_loop
             log "engine exited (rc=$?), restart in 5s"
