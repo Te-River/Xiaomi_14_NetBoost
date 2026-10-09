@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.2",
-  "versionCode": 211,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.2/netboost-android14-6.1.zip",
-  "changelog": "v2.7.2: fix stale 灵犀 status in module description (KSU manager now syncs on daemon start/stop); v2.7.1: LingXi engine (scene prediction + self-learning cellmap), persistent data dir, WebUI panel, cellmap cap 1024"
+  "version": "v2.7.3",
+  "versionCode": 212,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.3/netboost-android14-6.1.zip",
+  "changelog": "v2.7.3: LingXi daemon keepalive (setsid + HUP ignored + auto-restart supervisor + WebUI self-heal; respects manual stop); v2.7.2: fix stale 灵犀 status in module description (KSU manager now syncs on daemon start/stop); v2.7.1: LingXi engine (scene prediction + self-learning cellmap), persistent data dir, WebUI panel, cellmap cap 1024"
 }

@@ -1,6 +1,6 @@
 id=netboost
 name=NetBoost - Xiaomi 14 Kernel Network Accelerator
-version=v2.7.2
-versionCode=211
+version=v2.7.3
+versionCode=212
 author=Te-River
 description=[模式:boost|算法:bbr3|qdisc:fq|LKM:0/3|灵犀:off] 小米14内核网络加速+灵犀式自动场景(RSRP预判/小区学习/快速回网/场景择优). nb.sh wifi 手动切场景, lingxi.sh status 查看自动判定, nb.sh stock 恢复原厂.

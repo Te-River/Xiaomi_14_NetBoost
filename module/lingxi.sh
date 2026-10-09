@@ -134,7 +134,7 @@ map_touch() {  # map_touch <cell>  -> 命中数自增/新增
     ' "${MAP}" > "${tmp}" 2>/dev/null && mv -f "${tmp}" "${MAP}" || \
         printf '%s,1,0,%s\n' "$1" "${now}" > "${MAP}" 2>/dev/null
     # 超限淘汰: 按最近活跃保留一半
-    if [ "$(wc -l < "${MAP}" 2>/dev/null)" -gt "${LINGXI_MAP_MAX}" ]; then
+    if [ -s "${MAP}" ] && [ "$(wc -l < "${MAP}" 2>/dev/null)" -gt "${LINGXI_MAP_MAX}" ]; then
         sort -t, -k4 -nr "${MAP}" | head -n $((LINGXI_MAP_MAX / 2)) > "${tmp}" \
             && mv -f "${tmp}" "${MAP}"
     fi
@@ -282,6 +282,9 @@ run_loop() {
             rssi=$(wifi_rssi_of); rsrp=""; cellid=""
         else
             rsrp=$(rsrp_of); cellid=$(cell_of)
+            # sanitize: mksh aborts the whole script on arithmetic with a
+            # non-numeric operand -- a dirty rsrp value must never kill us
+            case "${rsrp}" in ''|*[!0-9-]*) rsrp="" ;; esac
             if [ -n "${cellid}" ] && [ "${cellid}" != "${prev_cell}" ]; then
                 switches=$((switches + 1))
             fi
@@ -320,17 +323,36 @@ case "$1" in
         if [ -f "${PIDF}" ] && kill -0 "$(cat "${PIDF}")" 2>/dev/null; then
             echo "already running"; exit 0
         fi
-        run_loop &
+        # supervisor mode: setsid detaches the engine from the service.sh
+        # session (survives Android phantom process cleanup of the parent),
+        # SIGHUP ignored, and the engine auto-restarts 5s after any death
+        # (phantom killer / LMK / aborted arithmetic).
+        if command -v setsid >/dev/null 2>&1; then
+            setsid sh "${0}" __daemon >/dev/null 2>&1 &
+        else
+            sh "${0}" __daemon >/dev/null 2>&1 &
+        fi
         echo $! > "${PIDF}"
         echo "started (pid $(cat "${PIDF}"))"
         # sync module.prop desc so the KSU manager shows 灵犀:on
         [ -f "${MODDIR}/update-display.sh" ] && sh "${MODDIR}/update-display.sh" >/dev/null 2>&1
         ;;
     stop)
-        [ -f "${PIDF}" ] && kill "$(cat "${PIDF}")" 2>/dev/null
+        if [ -f "${PIDF}" ]; then
+            P=$(cat "${PIDF}")
+            # negative pid kills the whole process group (supervisor+engine)
+            kill -- -"${P}" 2>/dev/null || kill "${P}" 2>/dev/null
+        fi
         rm -f "${PIDF}"; echo stopped
         # sync module.prop desc so the KSU manager shows 灵犀:off
         [ -f "${MODDIR}/update-display.sh" ] && sh "${MODDIR}/update-display.sh" >/dev/null 2>&1 ;;
+    __daemon)
+        trap '' HUP
+        while :; do
+            run_loop
+            log "engine exited (rc=$?), restart in 5s"
+            sleep 5
+        done ;;
     once)
         iface=$(iface_of)
         if is_wifi "${iface}"; then

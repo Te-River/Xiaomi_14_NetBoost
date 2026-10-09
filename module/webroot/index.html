@@ -149,7 +149,9 @@ echo =Q; cat /proc/sys/net/core/default_qdisc;
 echo =S; cat $MOD/scenario 2>/dev/null;
 echo =M; for m in ${MODS.join(' ')}; do grep -q "^$m " /proc/modules && echo "$m 1" || echo "$m 0"; done;
 echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)";
-echo =X; lx=0; [ -f $MOD/lingxi.pid ] && kill -0 $(cat $MOD/lingxi.pid) 2>/dev/null && lx=1; echo "running=$lx";
+echo =X; lx=0; [ -f $MOD/lingxi.pid ] && kill -0 $(cat $MOD/lingxi.pid) 2>/dev/null && lx=1;
+if [ "$lx" = 0 ] && [ -f $MOD/lingxi.sh ] && [ ! -f $DATA/lingxi.disabled ]; then sh $MOD/lingxi.sh start >/dev/null 2>&1 && lx=1; fi;
+echo "running=$lx";
 [ -f $DATA/lingxi.state ] && grep -E '^(scenario|candidate)=' $DATA/lingxi.state 2>/dev/null;
 echo "cells=$(wc -l < $DATA/cellmap.csv 2>/dev/null || echo 0)";
 echo "weak=$(awk -F, '$3>=3{n++}END{print n+0}' $DATA/cellmap.csv 2>/dev/null || echo 0)"`);
@@ -269,11 +271,11 @@ sh ${MOD}/nb.sh apply "$s"`);
     try { toast('已重新应用调优'); } catch(e){}
     refresh(); return;
   } else if (b.id === 'btnLxStart'){
-    await runDiag(`sh ${MOD}/lingxi.sh start`);
+    await runDiag(`rm -f /data/adb/netboost_data/lingxi.disabled; sh ${MOD}/lingxi.sh start`);
     try { toast('灵犀自动场景已启动'); } catch(e){}
     refresh(); return;
   } else if (b.id === 'btnLxStop'){
-    await runDiag(`sh ${MOD}/lingxi.sh stop`);
+    await runDiag(`sh ${MOD}/lingxi.sh stop; touch /data/adb/netboost_data/lingxi.disabled`);
     try { toast('灵犀自动场景已停止'); } catch(e){}
     refresh(); return;
   } else if (b.id === 'btnLxMap'){
