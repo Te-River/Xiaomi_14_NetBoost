@@ -2,6 +2,8 @@
 
 针对小米 14（SM8650 / 骁龙 8 Gen3，`android14-6.1` GKI 内核）的内核级网络协议优化 KernelSU 模块。
 
+v2.7.0 起内置 **LingXi 灵犀式自动场景引擎**：参考华为"灵犀算法"的策略层，自动识别场景并切换算法，无需任何手动配置。
+
 ## 核心思路
 
 GKI 内核默认只编译了 CUBIC 等少量 TCP 拥塞控制算法，BBR/Westwood 等更适合移动网络的算法并未内置。NetBoost 通过**内核模块（.ko）**把 BBRv3 等算法补进内核，并提供**场景感知**的算法切换能力，针对中国移动网络的不同使用场景选择最合适的算法。
@@ -30,6 +32,40 @@ GKI 内核默认只编译了 CUBIC 等少量 TCP 拥塞控制算法，BBR/Westwo
 
 > 诚实声明：如果瓶颈是运营商在互联点的**硬性单流限速**，内核参数无法突破，只能靠游戏自身多连接。以上调优对"丢包/窗口受限"型瓶颈有效。
 
+## LingXi 灵犀式自动场景引擎（v2.7.0）
+
+华为"灵犀算法"的效果 = 硬件层（天线/射频/基带，**任何 root 模块均不可复现**）+ **策略层**（场景识别与调度，可软件近似）。LingXi 实现的就是后者的四项核心能力，作为 `nb.sh` 场景引擎之上的感知/决策层，执行层完全复用现有场景定义：
+
+| 灵犀能力 | LingXi 实现 | 细节 |
+|---|---|---|
+| 场景智能预判 | **RSRP 衰减率检测**：连续 2 个采样周期每周期下降 ≥ 8dB → 预判正在进入弱信号区，**立即**切 `weak`（不等信号真正跌穿阈值） | 灵犀"提前 0.8s 启动切换"的近似；采样周期 5s，弱区预判跳过防抖 |
+| 网络择优 | 自动调用 `nb.sh <场景>`：蜂窝按 RSRP / 小区切换频率 / RTT 丢包判定 `weak`/`train`/`crowd`/`boost`，Wi-Fi 下切 `wifi` | 复用既有场景-算法映射，零重复实现 |
+| 弱信号快速恢复 | **"出电梯"检测**：RSRP 从 ≤ -112dBm 回升到 ≥ -95dBm → `ip route flush cache` + 清理悬挂态 TCP 连接（fin-wait-1/last-ack/close-wait），应用侧 socket 立即报错重建 | 不动 syn-*，不误杀建连中的新连接；60s 冷却防重复触发 |
+| 自主学习 | **cellmap 迷你通信地图**：记录 cell_id → weak_hits，同一小区累计 3 次弱信号后，再次进入**免预热直切 weak** | 仅存本地 `cellmap.csv`，不上传；上限 512 行按最近活跃淘汰 |
+
+判定优先级：**衰减预判 > 学习库命中 > 当前状态识别**（弱信号 → 高频切换 → 拥塞 → 默认 boost）。
+
+防振荡设计：普通场景切换需连续 2 个采样周期一致 + 当前场景保持 ≥ 30s（`LINGXI_MIN_HOLD`）；灭屏自动降采样频率（5s → 15s），RTT 探测每 30s 一次，功耗增量约等于一个低频闹钟。
+
+### LingXi 命令
+
+```bash
+su -c "/data/adb/modules/netboost/lingxi.sh status"     # 当前场景/候选/判定依据/学习库规模
+su -c "/data/adb/modules/netboost/lingxi.sh once"       # 单次采样输出（调试）
+su -c "/data/adb/modules/netboost/lingxi.sh stop"       # 停止自动场景（回到手动模式）
+su -c "/data/adb/modules/netboost/lingxi.sh start"      # 重新启动
+su -c "/data/adb/modules/netboost/lingxi.sh reset-map"  # 清空基站学习库
+tail -f /data/adb/modules/netboost/netboost.log | grep lingxi   # 场景切换/恢复事件流
+```
+
+所有阈值可在 `netboost.conf` 的 `LINGXI_*` 段调整；`LINGXI_AUTO=0` 彻底关闭开机自启。手动切场景（`nb.sh train` 等）与自动引擎不冲突：lingxi 下一次判定会按当前网络状态继续决策。
+
+### 诚实边界
+
+- RSRP/小区数据来自 `dumpsys telephony.registry`，部分 ROM 字段格式有差异，解析失败时对应能力自动降级（学习库功能依赖 cell_id 可读）
+- 真正的"出电梯 1 秒回网"主体在基带固件（小区重选/重建），本引擎只加速**回网后的应用层恢复**
+- 华为通信地图是全国路测数据资产，cellmap 只能学习你**自己走过的路线**
+
 ## 模块组成
 
 ```
@@ -41,9 +77,10 @@ netboost/
 ├── module/                # KernelSU 模块包
 │   ├── module.prop        # 模块元数据（描述行 = 实时状态）
 │   ├── customize.sh       # 安装脚本
-│   ├── service.sh         # 开机加载模块+应用场景
+│   ├── service.sh         # 开机加载模块+应用场景+启动 LingXi
 │   ├── nb.sh              # 场景/算法切换 CLI + stock 一键恢复（纯 sysctl）
-│   ├── netboost.conf      # 默认场景配置
+│   ├── lingxi.sh          # 灵犀式自动场景引擎（v2.7.0+，感知+决策层）
+│   ├── netboost.conf      # 默认场景配置 + LINGXI_* 阈值
 │   ├── webroot/           # KernelSU WebUI
 │   └── uninstall.sh       # 卸载清理
 ├── scripts/build.sh       # 一键构建脚本
@@ -141,10 +178,11 @@ WebUI 通过 KernelSU 官方 `kernelsu` JS 接口以 root 执行命令，无外�
 KernelSU 管理器中，模块描述的第一段就是实时状态（开机后由 `update-display.sh` 自动写入）：
 
 ```
-[模式:boost|算法:bbr3|qdisc:fq|LKM:3/3] ...
+[模式:boost|算法:bbr3|qdisc:fq|LKM:3/3|灵犀:on] ...
 ```
 
-- `LKM:3/3` 表示三个算法内核模块全部加载成功；显示 `0/3` 或更小 = 模块没加载上（大概率 vermagic 不匹配，见下方故障排查），此时自动回退 `cubic`，MTU/保活/缓冲调优不受影响
+- `LKM:3/3` 表示三个算法内核模块全部加载成功；显示 `0/3` 或更小 = 模块没加载上（大概率 CRC 不匹配，见下方故障排查），此时自动回退 `cubic`，MTU/保活/缓冲调优不受影响
+- `灵犀:on` 表示 LingXi 自动场景引擎运行中（off = 手动模式）
 - 运行时切换场景会同步刷新显示：
 
 ```bash
@@ -154,17 +192,26 @@ su -c /data/adb/modules/netboost/nb.sh status  # 查看实时状态
 
 ## 故障排查
 
-- **`tcp_congestion_control` 显示 cubic / `LKM:0/3`**：内核模块没加载成功。内核要求模块的 vermagic 与设备 `uname -r` **完全一致**，否则 `insmod` 报 `Invalid module format`。诊断：
+- **`tcp_congestion_control` 显示 cubic / `LKM:0/3`**：内核模块没加载成功。诊断：
 
 ```bash
 su -c "uname -r"                                    # 设备内核版本
 su -c "tail -20 /data/adb/modules/netboost/netboost.log"
 su -c "insmod /data/adb/modules/netboost/kernel/tcp_bbr3.ko"   # 直接看报错
+dmesg | tail -30                                    # 真实原因都在内核日志
 ```
 
-  确认是 vermagic 不匹配后，把 `uname -r` 的完整字符串写入仓库 `kernel/TARGET_RELEASE`（或构建时传 `NB_KERNEL_RELEASE=`），重新构建即可；安装时 `customize.sh` 也会自动比对 `BUILD_RELEASE` 并在管理器日志里警告不匹配。
+  **v2.7.0 起请按内核日志的真实报错分类**（`kernel/module/version.c` 的 `same_magic()` 证明：MODVERSIONS 模块加载时**只比较 vermagic 的 flags 部分，release 字符串不参与比较**，ABI 由符号 CRC 兜底）：
 
-- **当前构建已钉扎**：`kernel/TARGET_RELEASE` = `6.1.138-android14-11-g0c3d559bcd85-ab14529422`（小米 14 官方内核）。**系统 OTA 更新若变更内核版本，`uname -r` 随之改变，模块将无法加载**（管理器显示 `LKM:0/3`）——此时更新 `TARGET_RELEASE` 重新构建即可。容器内构建后会逐一断言三个 `.ko` 的 vermagic，不匹配直接失败，不会发出坏包。
+  | dmesg 报错 | 真实原因 | 处理 |
+  |---|---|---|
+  | `version magic ... should be ...` | **flags 不一致**（模块与设备内核的 SMP/preempt/modversions 配置差异） | 确认设备内核确为 `android14-6.1` GKI；GKI 官方构建 flags 必然一致，出现此报错说明设备是魔改内核 |
+  | `disagrees about version of symbol ...` / `unknown symbol` | **符号 CRC 不匹配 / 符号未导出**（KMI 被厂商裁剪） | 把缺的符号反馈到 issue，按 `kapi_deny` 机制适配 |
+  | 其他 `Invalid module format` | ELF 层问题（架构/字节序） | 确认 arm64 设备 |
+
+  与 v2.6 及之前的差异：**不再需要**为每个 `uname -r` 变体重新钉扎构建——`kernel/TARGET_RELEASE` 现在只是"构建基线"（保证产物 release 字符串整洁可复现），不再是加载的必要条件。
+
+- **兼容范围（v2.7.0）**：同一份 `.ko` 兼容**所有 `6.1.x-android14` 内核**（`6.1.138-android14-11-g0c3d559bcd85-ab14529422` 及任何 sublevel / 任何 g-hash / ab 戳变体，含其他厂商的 android14-6.1 GKI 设备）。前提是内核未破坏 KMI——CRC 不匹配时自动回退 sysctl 模式，调优（MTU/保活/缓冲）不受影响。
 
 - **WiFi 下感觉变慢 / 支付宝等 App 提示网络风险**：
   - v2.5.x 曾设置 `tcp_no_metrics_save=1`（不复用路径度量），导致每个新连接都完整慢启动，WiFi 下大量短连接（网页/图片/视频分片）会明显变慢。**v2.6.0 已彻底移除该参数**，恢复内核默认的度量缓存。
@@ -179,12 +226,14 @@ su -c "insmod /data/adb/modules/netboost/kernel/tcp_bbr3.ko"   # 直接看报错
 - **原厂快照**：首次调优前 `nb.sh` 把本机所有被改动的 sysctl 备份到 `netboost.orig`，`nb.sh stock` / 卸载脚本据此精确还原，不依赖硬编码的"默认值"。
 - **BBRv3 适配**：`struct bbr`（约 200B）放不进 104B 的 `icsk_ca_priv`，backport 用动态分配解决；探测式兼容层自动适配 5.4~6.6+ 内核。
 - **符号裁剪适配**：设备内核的 KMI 裁剪会砍掉构建树里存在的导出符号（`__tcp_send_ack`、`minmax_running_max`、`register_btf_kfunc_id_set`），backport 分别用 deny-list、本地实现、删除调用适配。
+- **vermagic 与 MODVERSIONS（v2.7.0 修正）**：`kernel/module/version.c: same_magic()` 对带 `__crc_*` 的模块**只比较 vermagic 第一个空格之后的 flags**（`SMP preempt mod_unload modversions aarch64`），UTS_RELEASE 不参与比较——所以一份 `6.1.138` 基线构建天然兼容全部 `6.1.x-android14` 内核，真正的硬门槛是符号 CRC（KMI 保证同 KMI 一致）。CI 与容器内断言已改为"flags + 6.1 前缀"校验。
 - **容错**：`.ko` 加载失败时自动回退下一个可用算法（最终 cubic），MTU/保活/缓冲调优不受影响；安装包在 CI 中自动校验完整性。
 
 ## 兼容性
 
 - 目标：小米 14 / 14 Pro（SM8650），内核 `6.1.138-android14-...`（android14-6.1 GKI）
-- 理论兼容所有 `android14-6.1` GKI 设备
+- **v2.7.0 起一份构建兼容所有 `6.1.x-android14` 内核**（MODVERSIONS flags 校验 + 符号 CRC 兜底），包括其他厂商的 android14-6.1 GKI 设备；KMI 被破坏的魔改内核自动回退 sysctl 模式
+- LingXi 感知层依赖 `dumpsys telephony.registry` / `iw` / `ip` / `ping`（Android 14 自带），解析失败自动降级，不影响 nb.sh 手动功能
 - 已在本机 5.15 内核验证编译通过（API 与 GKI 6.1 一致）
 
 ## 许可证
