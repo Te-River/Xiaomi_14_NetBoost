@@ -43,6 +43,7 @@ NetBoost 的目标：以 KernelSU 内核模块（.ko）形式，把 BBRv3 等算
 │           /data/adb/modules/netboost        │
 │  module.prop / customize.sh / service.sh    │
 │  netboost.conf (SCENARIO=boost) / nb.sh     │
+│  lingxi.sh (灵犀自动场景, v2.7.0+)          │
 └──────────────────┬──────────────────────────┘
                    │ insmod (开机加载)
 ┌──────────────────▼──────────────────────────┐
@@ -55,6 +56,11 @@ NetBoost 的目标：以 KernelSU 内核模块（.ko）形式，把 BBRv3 等算
 │  /proc/sys/net/ipv4/tcp_congestion_control  │
 │  (内核标准接口，切换默认算法)                │
 └─────────────────────────────────────────────┘
+
+LingXi 感知/决策层（v2.7.0+，用户态守护）:
+  dumpsys telephony.registry (RSRP/小区) / iw (Wi-Fi RSSI) / ping (RTT 丢包)
+      → 场景状态机（衰减预判 > 学习库命中 > 状态识别，防抖 + 最小保持）
+      → sh nb.sh <scenario>（完全复用执行层，零内核改动）
 ```
 
 > v2.6.0 起**没有管理核心模块**：原 `netboost_core.ko` 依赖的 `filp_open` /
@@ -80,6 +86,8 @@ NetBoost 的目标：以 KernelSU 内核模块（.ko）形式，把 BBRv3 等算
 
 `service.sh` 依次 `insmod` 三个算法 LKM（相互独立，单个失败不影响其它）。随后 `nb.sh apply <场景>` 按偏好选择算法：`bbr3` → `bbr` → `cubic`（依据 `tcp_available_congestion_control`）。模块全部失败时仍保持 cubic，MTU/保活/缓冲调优不受影响。
 
+LingXi 守护进程（`lingxi.sh start`，由 `service.sh` 末尾按 `LINGXI_AUTO=1` 拉起）在此基础上做自动场景决策，执行层仍走 `nb.sh`——算法/qdisc/保活/缓冲的全部场景语义不变。
+
 ## 5. 模块接口
 
 ### `nb.sh` CLI（v2.6.0）
@@ -103,6 +111,20 @@ usage:
 
 状态文件：`/data/adb/modules/netboost/scenario`（当前场景，WebUI 读取）；
 原厂快照：`netboost.orig`（首次调优前自动备份，`stock`/卸载据此还原）。
+
+### `lingxi.sh` CLI（v2.7.0）
+
+```
+usage:
+  lingxi.sh start|stop        启动/停止自动场景守护（开机由 service.sh 按 LINGXI_AUTO 拉起）
+  lingxi.sh status            当前场景/候选/判定依据/学习库规模
+  lingxi.sh once              单次采样输出（调试）
+  lingxi.sh reset-map         清空基站学习库 cellmap.csv
+```
+
+状态文件：`lingxi.state`（场景/候选/时间戳）；学习库：`cellmap.csv`
+（`cell_id,hits,weak_hits,last_seen`，仅本地存储）。阈值全部在
+`netboost.conf` 的 `LINGXI_*` 段。
 
 ## 6. 构建流程
 
