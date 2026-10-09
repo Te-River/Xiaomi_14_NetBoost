@@ -56,7 +56,7 @@ LINGXI_LOSS_CROWD="${LINGXI_LOSS_CROWD:-20}"        # 拥塞判定丢包率(%)
 LINGXI_MIN_HOLD="${LINGXI_MIN_HOLD:-30}"            # 场景最小保持(s)
 LINGXI_PING_TARGET="${LINGXI_PING_TARGET:-223.5.5.5}"
 LINGXI_PING_EVERY="${LINGXI_PING_EVERY:-30}"        # RTT 探测间隔(s)
-LINGXI_MAP_MAX="${LINGXI_MAP_MAX:-512}"             # 学习库上限(行)
+LINGXI_MAP_MAX="${LINGXI_MAP_MAX:-1024}"             # 学习库上限(行)
 LINGXI_LOG_SAMPLES="${LINGXI_LOG_SAMPLES:-0}"       # 1=每次采样写日志(调试)
 
 log() { echo "[$(date '+%F %T')] [lingxi] $*" >> "${LOG}"; }

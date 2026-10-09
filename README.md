@@ -41,7 +41,7 @@ GKI 内核默认只编译了 CUBIC 等少量 TCP 拥塞控制算法，BBR/Westwo
 | 场景智能预判 | **RSRP 衰减率检测**：连续 2 个采样周期每周期下降 ≥ 8dB → 预判正在进入弱信号区，**立即**切 `weak`（不等信号真正跌穿阈值） | 灵犀"提前 0.8s 启动切换"的近似；采样周期 5s，弱区预判跳过防抖 |
 | 网络择优 | 自动调用 `nb.sh <场景>`：蜂窝按 RSRP / 小区切换频率 / RTT 丢包判定 `weak`/`train`/`crowd`/`boost`，Wi-Fi 下切 `wifi` | 复用既有场景-算法映射，零重复实现 |
 | 弱信号快速恢复 | **"出电梯"检测**：RSRP 从 ≤ -112dBm 回升到 ≥ -95dBm → `ip route flush cache` + 清理悬挂态 TCP 连接（fin-wait-1/last-ack/close-wait），应用侧 socket 立即报错重建 | 不动 syn-*，不误杀建连中的新连接；60s 冷却防重复触发 |
-| 自主学习 | **cellmap 迷你通信地图**：记录 cell_id → weak_hits，同一小区累计 3 次弱信号后，再次进入**免预热直切 weak** | 存于 `/data/adb/netboost_data/cellmap.csv`（持久化目录，模块更新/重装/卸载均不丢失，不上传）；上限 512 行按最近活跃淘汰 |
+| 自主学习 | **cellmap 迷你通信地图**：记录 cell_id → weak_hits，同一小区累计 3 次弱信号后，再次进入**免预热直切 weak** | 存于 `/data/adb/netboost_data/cellmap.csv`（持久化目录，模块更新/重装/卸载均不丢失，不上传）；上限 1024 行按最近活跃淘汰 |
 
 判定优先级：**衰减预判 > 学习库命中 > 当前状态识别**（弱信号 → 高频切换 → 拥塞 → 默认 boost）。
 

@@ -1,0 +1,6 @@
+{
+  "version": "v2.7.1",
+  "versionCode": 210,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.1/netboost-android14-6.1.zip",
+  "changelog": "v2.7.1: LingXi engine (scene prediction + self-learning cellmap), persistent data dir /data/adb/netboost_data, WebUI LingXi panel, cellmap cap raised to 1024, kernel check relaxed to all android14-6.1 GKI builds (MODVERSIONS flags based)"
+}
