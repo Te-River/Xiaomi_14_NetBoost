@@ -75,23 +75,35 @@ iface_of() {
 }
 
 # 蜂窝 RSRP: dumpsys telephony.registry, 多级解析, 失败输出空
+# NOTE: AOSP SignalStrength.toString() prints mLteRsrp=-95 / mNrRsrp=-105
+# (capital R!) -- a case-sensitive 'rsrp=' match silently misses them and
+# the whole engine goes blind. Match case-insensitively, NR first.
 rsrp_of() {
-    local t=""
+    local t v
     t=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
-    # 1) LTE/NR rsrp 字段 (形如 rsrp=-95)
-    echo "${t}" | grep -o 'rsrp[= ][ ]*-[0-9]\+' | head -n1 \
-        | grep -o '\-[0-9]\+' && return 0
-    # 2) dbm 字段
-    echo "${t}" | grep -o 'dbm[= ][ ]*-[0-9]\+' | head -n1 \
-        | grep -o '\-[0-9]\+' && return 0
+    for pat in 'mNrRsrp=[-0-9]+' 'mLteRsrp=[-0-9]+' \
+               'rsrp[= ][ ]*[-0-9]+' 'dbm[= ][ ]*[-0-9]+'; do
+        v=$(echo "${t}" | grep -m1 -ioE "${pat}" | grep -oE '[-0-9]+$')
+        # RSRP/dbm are always negative; a positive value is the AOSP
+        # "unknown" sentinel (Integer.MAX_VALUE) -- skip it
+        case "${v}" in -*) echo "${v}"; return 0 ;; esac
+    done
     return 0
 }
 
 # 当前小区 ID (学习库主键), 失败输出空 -> 学习功能自动降级
+# AOSP CellIdentity.toString(): LTE '{ mMcc=460 mMnc=11 mCi=123456789 ... }',
+# NR '{ mMcc=460 mMnc=11 mNci=987654321 ... }' (HyperOS 同源, 字段一致)
 cell_of() {
-    timeout 4 dumpsys telephony.registry 2>/dev/null \
-        | grep -m1 -oE '(cid|ci)=[0-9a-fx]+' \
-        | grep -oE '[0-9a-fx]+$'
+    local t v
+    t=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
+    for pat in 'mNci=[0-9a-fA-F]+' 'mCi=[0-9a-fA-F]+' \
+               'nci=[0-9a-fA-F]+' '\bci=[0-9a-fA-F]+' \
+               'mCid=[0-9a-fA-F]+' 'cid=[0-9a-fA-F]+'; do
+        v=$(echo "${t}" | grep -m1 -ioE "${pat}" | grep -oE '[0-9a-fA-F]+$')
+        [ -n "${v}" ] && { echo "${v}"; return 0; }
+    done
+    return 0
 }
 
 wifi_rssi_of() {
