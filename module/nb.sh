@@ -20,7 +20,19 @@
 
 MODDIR="${0%/*}"
 CONF="${MODDIR}/netboost.conf"
-ORIG="${MODDIR}/netboost.orig"
+
+# --- persistent data dir (survives module updates/reinstalls) --------
+# netboost.orig is the per-device stock snapshot: losing it means
+# `nb.sh stock` / uninstall can never restore exact stock values.
+# Kept OUTSIDE the module dir; migrate from the legacy in-module
+# location (pre-v2.7.1) on first run.
+NB_DATA="/data/adb/netboost_data"
+mkdir -p "${NB_DATA}" 2>/dev/null && chmod 700 "${NB_DATA}" 2>/dev/null
+ORIG="${NB_DATA}/netboost.orig"
+if [ -s "${MODDIR}/netboost.orig" ] && [ ! -s "${ORIG}" ]; then
+    mv -f "${MODDIR}/netboost.orig" "${ORIG}" 2>/dev/null
+fi
+
 SCENF="${MODDIR}/scenario"
 LOG="${MODDIR}/netboost.log"
 

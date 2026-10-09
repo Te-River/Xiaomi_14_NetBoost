@@ -10,13 +10,24 @@
 # after uninstall gives a fully clean state anyway.
 
 MODDIR="${0%/*}"
-ORIG="${MODDIR}/netboost.orig"
+NB_DATA="/data/adb/netboost_data"
 
 # stop the LingXi auto-scenario daemon if running
 if [ -f "${MODDIR}/lingxi.pid" ]; then
     kill "$(cat "${MODDIR}/lingxi.pid")" 2>/dev/null
     rm -f "${MODDIR}/lingxi.pid"
 fi
+
+# stock snapshot location: persistent data dir (v2.7.1+) with fallback
+# to the legacy in-module path (v2.6/v2.7.0 upgrades)
+if [ -s "${NB_DATA}/netboost.orig" ]; then
+    ORIG="${NB_DATA}/netboost.orig"
+else
+    ORIG="${MODDIR}/netboost.orig"
+fi
+# NOTE: /data/adb/netboost_data (cellmap learning data) is intentionally
+# KEPT after uninstall - it survives re-installs. Remove it manually
+# with: rm -rf /data/adb/netboost_data
 
 # unload modules if loaded (no dependencies between them)
 for m in tcp_westwood tcp_bbr tcp_bbr3; do

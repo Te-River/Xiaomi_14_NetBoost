@@ -63,6 +63,21 @@
 <div class="chips" id="mods"></div>
 <div class="note" id="vermagic"></div>
 
+<h2>灵犀自动场景（RSRP 预判 · 小区学习 · 快速回网）</h2>
+<div class="grid">
+  <div class="card"><div class="k">守护进程</div><div class="v" id="lxDaemon">…</div></div>
+  <div class="card"><div class="k">自动判定候选</div><div class="v" id="lxCand" style="font-size:15px">…</div></div>
+  <div class="card"><div class="k">学习库小区</div><div class="v" id="lxCells">…</div></div>
+  <div class="card"><div class="k">已知弱信号小区</div><div class="v" id="lxWeak" style="font-size:15px">…</div></div>
+</div>
+<div class="row">
+  <button id="btnLxStart">启动</button>
+  <button id="btnLxStop">停止</button>
+  <button id="btnLxMap">学习库明细</button>
+  <button id="btnLxReset">清空学习库</button>
+</div>
+<div class="note">学习数据（cellmap.csv / 原厂快照）保存在 <b>/data/adb/netboost_data</b>，模块更新、重装、卸载均不会丢失；"清空学习库"仅重置学习成果。自动判定每 5 秒采样一次（灭屏 15 秒），切换时写入 netboost.log（lingxi 标签）。</div>
+
 <h2>切换场景（算法+队列+保活一键组合）</h2>
 <div class="btns" id="scnBtns"></div>
 <div class="note">wifi 场景使用原厂保活参数（家宽 NAT 无需 60s 探测）；其余场景用 60s 保活对抗运营商 CGNAT。</div>
@@ -124,7 +139,7 @@ function section(out, tag){
 async function refresh(){
   if (busy) return; busy = true;
   try {
-    const out = await sh(`MOD=${MOD};
+    const out = await sh(`MOD=${MOD}; DATA=/data/adb/netboost_data;
 echo =V; grep '^version=' $MOD/module.prop 2>/dev/null | head -1;
 echo =K; uname -r;
 echo =B; cat $MOD/BUILD_RELEASE 2>/dev/null;
@@ -133,7 +148,11 @@ echo =L; cat /proc/sys/net/ipv4/tcp_available_congestion_control;
 echo =Q; cat /proc/sys/net/core/default_qdisc;
 echo =S; cat $MOD/scenario 2>/dev/null;
 echo =M; for m in ${MODS.join(' ')}; do grep -q "^$m " /proc/modules && echo "$m 1" || echo "$m 0"; done;
-echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)"`);
+echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)";
+echo =X; lx=0; [ -f $MOD/lingxi.pid ] && kill -0 $(cat $MOD/lingxi.pid) 2>/dev/null && lx=1; echo "running=$lx";
+[ -f $DATA/lingxi.state ] && grep -E '^(scenario|candidate)=' $DATA/lingxi.state 2>/dev/null;
+echo "cells=$(wc -l < $DATA/cellmap.csv 2>/dev/null || echo 0)";
+echo "weak=$(awk -F, '$3>=3{n++}END{print n+0}' $DATA/cellmap.csv 2>/dev/null || echo 0)"`);
     state = {
       ver:  section('\n'+out,'V').replace('version=',''),
       kern: section('\n'+out,'K'),
@@ -144,6 +163,7 @@ echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_kee
       scn:  section('\n'+out,'S'),
       mods: Object.fromEntries(section('\n'+out,'M').split('\n').filter(Boolean).map(l=>l.split(' '))),
       tune: Object.fromEntries(section('\n'+out,'T').split('\n').filter(l=>l.includes('=')).map(l=>l.split('='))),
+      lx:   Object.fromEntries(section('\n'+out,'X').split('\n').filter(l=>l.includes('=')).map(l=>l.split('='))),
     };
     render();
     document.getElementById('banner').style.display = 'none';
@@ -197,6 +217,20 @@ function render(){
                rmem_max:'接收缓冲上限', wmem_max:'发送缓冲上限' };
   document.getElementById('tuning').innerHTML =
     Object.keys(TN).filter(k=>S.tune[k]!==undefined).map(k=>`<tr><td>${TN[k]}</td><td>${S.tune[k]}</td></tr>`).join('');
+  // lingxi cards
+  const X = S.lx || {};
+  const run = X.running === '1';
+  const de = document.getElementById('lxDaemon');
+  de.textContent = run ? '运行中' : '已停止';
+  de.className = 'v ' + (run ? 'ok' : 'warn');
+  const cand = (X.candidate || '').trim();
+  const cd = document.getElementById('lxCand');
+  cd.textContent = cand ? (SCN[cand] || cand) : '—';
+  const cells = document.getElementById('lxCells');
+  cells.textContent = (X.cells || '0') + ' 个';
+  const weak = document.getElementById('lxWeak');
+  weak.textContent = (X.weak || '0') + ' 个';
+  weak.className = 'v ' + (parseInt(X.weak||'0',10) > 0 ? 'ok' : '');
 }
 
 /* ---- actions */
@@ -233,6 +267,26 @@ echo "== dmesg(相关):"; dmesg 2>/dev/null | grep -iE 'netboost|bbr|westwood|un
 case "$s" in boost|train|crowd|weak|wifi|game) ;; *) s=boost ;; esac;
 sh ${MOD}/nb.sh apply "$s"`);
     try { toast('已重新应用调优'); } catch(e){}
+    refresh(); return;
+  } else if (b.id === 'btnLxStart'){
+    await runDiag(`sh ${MOD}/lingxi.sh start`);
+    try { toast('灵犀自动场景已启动'); } catch(e){}
+    refresh(); return;
+  } else if (b.id === 'btnLxStop'){
+    await runDiag(`sh ${MOD}/lingxi.sh stop`);
+    try { toast('灵犀自动场景已停止'); } catch(e){}
+    refresh(); return;
+  } else if (b.id === 'btnLxMap'){
+    await runDiag(`DATA=/data/adb/netboost_data;
+echo "== 学习库: /data/adb/netboost_data/cellmap.csv (cell_id,hits,weak_hits,last_seen)";
+if [ -s $DATA/cellmap.csv ]; then
+  sort -t, -k3 -nr $DATA/cellmap.csv | head -n 20
+  echo "…共 $(wc -l < $DATA/cellmap.csv) 行 (仅显示 weak_hits 前 20)"
+else echo "(空 - 尚未学习到任何小区)"; fi;
+echo; echo "== 运行状态:"; sh ${MOD}/lingxi.sh status`); return;
+  } else if (b.id === 'btnLxReset'){
+    await runDiag(`sh ${MOD}/lingxi.sh reset-map`);
+    try { toast('学习库已清空'); } catch(e){}
     refresh(); return;
   } else { return; }
   refresh();

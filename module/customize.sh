@@ -53,6 +53,28 @@ fi
 # remove stale files from a previous version (module update path)
 rm -f "${KERNEL_DIR}/netboost_core.ko" "${MODPATH}/netboost.orig" 2>/dev/null
 
+# --- persistent data migration (v2.6 -> v2.7.1+) ---------------------
+# The stock snapshot (netboost.orig) and LingXi learning data used to
+# live INSIDE the module dir, which gets wiped on module update. They
+# now live in /data/adb/netboost_data/. Migrate from the previously
+# installed module dir (still intact at install time) so a direct
+# v2.6 -> v2.7.1 upgrade keeps `nb.sh stock` working.
+NB_DATA="/data/adb/netboost_data"
+OLD_MOD="/data/adb/modules/netboost"
+mkdir -p "${NB_DATA}" 2>/dev/null && chmod 700 "${NB_DATA}" 2>/dev/null
+if [ -f "${OLD_MOD}/netboost.orig" ] && [ ! -s "${NB_DATA}/netboost.orig" ]; then
+    cp -f "${OLD_MOD}/netboost.orig" "${NB_DATA}/netboost.orig" 2>/dev/null && \
+        ui_print "  migrated: netboost.orig (stock snapshot)"
+fi
+if [ -f "${OLD_MOD}/cellmap.csv" ] && [ ! -s "${NB_DATA}/cellmap.csv" ]; then
+    cp -f "${OLD_MOD}/cellmap.csv" "${NB_DATA}/cellmap.csv" 2>/dev/null && \
+        ui_print "  migrated: cellmap.csv (lingxi learning data)"
+fi
+if [ -f "${OLD_MOD}/lingxi.state" ] && [ ! -s "${NB_DATA}/lingxi.state" ]; then
+    cp -f "${OLD_MOD}/lingxi.state" "${NB_DATA}/lingxi.state" 2>/dev/null
+fi
+ui_print "  data dir: ${NB_DATA} (persists across updates)"
+
 # --- kernel compatibility (MODVERSIONS facts, v2.7.0) -----------------
 # kernel/module/version.c: same_magic() only compares the FLAGS part of
 # vermagic for MODVERSIONS modules ("SMP preempt mod_unload modversions

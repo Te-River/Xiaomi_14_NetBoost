@@ -123,8 +123,11 @@ usage:
 ```
 
 状态文件：`lingxi.state`（场景/候选/时间戳）；学习库：`cellmap.csv`
-（`cell_id,hits,weak_hits,last_seen`，仅本地存储）。阈值全部在
-`netboost.conf` 的 `LINGXI_*` 段。
+（`cell_id,hits,weak_hits,last_seen`）。**v2.7.1 起二者与原厂快照
+（netboost.orig）一起持久化在 `/data/adb/netboost_data/`**（模块目录
+之外，更新/重装/卸载不丢；v2.6 升级时 customize.sh 自动迁移）。
+阈值全部在 `netboost.conf` 的 `LINGXI_*` 段。WebUI 已集成 LingXi
+状态卡片（守护进程/候选/学习库规模）与启停、学习库明细、清空按钮。
 
 ## 6. 构建流程
 

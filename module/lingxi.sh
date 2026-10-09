@@ -24,8 +24,21 @@ MODDIR="${0%/*}"
 CONF="${MODDIR}/netboost.conf"
 LOG="${MODDIR}/netboost.log"
 PIDF="${MODDIR}/lingxi.pid"
-STATE="${MODDIR}/lingxi.state"
-MAP="${MODDIR}/cellmap.csv"
+
+# ---- 持久化数据目录 (模块目录之外, 模块更新/重装不触碰) ----
+DATA_DIR="/data/adb/netboost_data"
+STATE="${DATA_DIR}/lingxi.state"
+MAP="${DATA_DIR}/cellmap.csv"
+persist_init() {
+    mkdir -p "${DATA_DIR}" 2>/dev/null
+    chmod 700 "${DATA_DIR}" 2>/dev/null
+    # 兜底迁移: 旧版本把 state/cellmap 放在模块目录 (模块更新会清掉)
+    [ -s "${MODDIR}/cellmap.csv" ] && [ ! -s "${MAP}" ] && \
+        mv -f "${MODDIR}/cellmap.csv" "${MAP}" 2>/dev/null
+    [ -s "${MODDIR}/lingxi.state" ] && [ ! -s "${STATE}" ] && \
+        mv -f "${MODDIR}/lingxi.state" "${STATE}" 2>/dev/null
+}
+persist_init
 
 # ---- 配置 (可在 netboost.conf 覆盖) ----
 [ -f "${CONF}" ] && . "${CONF}" 2>/dev/null
