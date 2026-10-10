@@ -46,6 +46,10 @@ jobs:
           ( cd kernel/tcp_bbr3 && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr3.ko )
           ( cd kernel/tcp_bbr && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_bbr.ko )
           ( cd kernel/tcp_westwood && zip -j ../../out/netboost-${{ matrix.kmi }}.zip tcp_westwood.ko )
+          # update.json ships as a release asset so module.prop's updateJson
+          # can point at releases/latest/download/update.json (always the
+          # newest metadata, no CDN cache lag like jsDelivr @main).
+          cp update.json out/
           ls -la out/
 
       - name: Syntax-check WebUI JS (ES module mode)
@@ -99,7 +103,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: out/netboost-*.zip
+          files: |
+            out/netboost-*.zip
+            out/update.json
           generate_release_notes: true
           body: |
             **NetBoost ${{ github.ref_name }}** — 小米 14（SM8650 / android14-6.1 GKI）内核级网络加速模块
