@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.9",
-  "versionCode": 218,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.9/netboost-android14-6.1.zip",
-  "changelog": "v2.7.9: adopted publicly-documented tunables - tcp_frto=2 (spurious-RTO detection for elevator/handover stalls), tcp_notsent_lowat=16384 (lower interactive latency), crowd/weak scenarios now prefer CAKE qdisc (anti-bufferbloat, falls back to fq_codel); WebUI shows F-RTO/notsent_lowat/MPTCP support"
+  "version": "v2.7.10",
+  "versionCode": 219,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.10/netboost-android14-6.1.zip",
+  "changelog": "v2.7.10: ensure kernel MPTCP switch is enabled on apply (idempotent, apps using IPPROTO_MPTCP benefit; WebUI shows support status); mptcp state included in stock restore"
 }

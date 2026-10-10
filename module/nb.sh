@@ -52,6 +52,7 @@ net/ipv4/tcp_wmem
 net/core/rmem_max
 net/core/wmem_max
 net/core/default_qdisc
+net/mptcp/enabled
 "
 
 log() { echo "[$(date '+%F %T')] $*" >> "${LOG}"; }
@@ -140,6 +141,14 @@ apply_scenario() {
     # - cap unsent backlog per socket: interactive apps (IM/game/pay) get
     #   out of the kernel queue sooner -> lower latency under load
     sysctlw net/ipv4/tcp_notsent_lowat 16384 tcp_notsent_lowat
+    # - MPTCP: kernel-side switch only (idempotent; upstream default is 1
+    #   on 5.6+). Apps must explicitly use IPPROTO_MPTCP sockets to
+    #   benefit - enabling here costs nothing and helps any that do.
+    if [ -e /proc/sys/net/mptcp/enabled ]; then
+        sysctlw net/mptcp/enabled 1 mptcp_enabled
+    else
+        log "mptcp_enabled: not supported by kernel"
+    fi
     # - TCP Fast Open, client side only: full benefit for outbound
     #   connections while staying as close to the stock TCP fingerprint
     #   as possible (bit 2 "server" is pointless on a phone)
