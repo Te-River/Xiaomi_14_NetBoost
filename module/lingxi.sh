@@ -360,8 +360,17 @@ EOF2
 # ---------------------------------------------------------------- cli
 status() {
     . "${STATE}" 2>/dev/null
+    local el=$(( $(date +%s) - ${since:-0} ))
+    local since_h
+    if [ ${el} -ge 0 ]; then
+        since_h="$(date -d @${since:-0} '+%H:%M' 2>/dev/null || echo '?')"
+        [ ${el} -ge 3600 ] && since_h="${since_h} (已运行 $((el/3600))h$(((el%3600)/60))m)" \
+            || since_h="${since_h} (已运行 $((el/60))m)"
+    else
+        since_h="?"
+    fi
     echo "daemon    : $([ -f "${PIDF}" ] && kill -0 "$(cat "${PIDF}")" 2>/dev/null && echo running || echo stopped)"
-    echo "scenario  : ${scenario:-?} (since ${since:-?})"
+    echo "scenario  : ${scenario:-?} (自 ${since_h})"
     echo "candidate : ${candidate:-?}"
     echo "cells     : $([ -s "${MAP}" ] && wc -l < "${MAP}" || echo 0) learned, $( [ -s "${MAP}" ] && awk -F, '$3>=3{n++}END{print n+0}' "${MAP}" || echo 0) known-weak"
     echo "thresholds: weak<=${LINGXI_WEAK_RSRP}dBm drop=${LINGXI_DROP_DB}dB/cycle train=${LINGXI_TRAIN_SWITCHES}/60s crowd rtt>=${LINGXI_RTT_CROWD}ms"
