@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.10",
-  "versionCode": 219,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.10/netboost-android14-6.1.zip",
-  "changelog": "v2.7.10: ensure kernel MPTCP switch is enabled on apply (idempotent, apps using IPPROTO_MPTCP benefit; WebUI shows support status); mptcp state included in stock restore"
+  "version": "v2.7.11",
+  "versionCode": 220,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.11/netboost-android14-6.1.zip",
+  "changelog": "v2.7.11: kernel-error button no longer matches bare \"module\" (was flooding output with unrelated haptics/driver logs); filter tightened to module-specific patterns"
 }

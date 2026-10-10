@@ -277,7 +277,7 @@ echo "== dmesg(相关):"; dmesg 2>/dev/null | grep -iE 'netboost|bbr|westwood|un
   } else if (b.id === 'btnLog'){
     await runDiag(`tail -n 60 ${MOD}/netboost.log 2>/dev/null || echo '(暂无日志)'`); return;
   } else if (b.id === 'btnDmesg'){
-    await runDiag(`dmesg 2>/dev/null | grep -iE 'netboost|bbr|westwood|unknown symbol|disagrees about version|module' | tail -n 40 || echo '(dmesg 不可读或无相关记录)'`); return;
+    await runDiag(`dmesg 2>/dev/null | grep -iE 'netboost|tcp_bbr|tcp_westwood|unknown symbol|disagrees about version|taint' | tail -n 40 || echo '(dmesg 不可读或无相关记录)'`); return;
   } else if (b.id === 'btnStock'){
     await runDiag(`sh ${MOD}/nb.sh stock`);
     try { toast('已恢复原厂参数（重启后自动恢复调优）'); } catch(e){}
