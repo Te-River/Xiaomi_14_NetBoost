@@ -115,15 +115,24 @@ cell_of() {
 # 用于按真实格式修正解析 (限 4KB, 仅在 cellmap 尚未建立时写一次)。
 DIAG="${DATA_DIR}/diag_dump.txt"
 diag_dump() {
-    local raw
-    raw=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
-    printf '%s\n' "${raw}" \
-        | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id|ServiceState' \
-        > "${DIAG}" 2>/dev/null
-    # 兜底: 过滤词一个都不中时, 落原始输出前 8KB, 保证总能看到真实格式
-    [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 8192 > "${DIAG}" 2>/dev/null
-    [ -s "${DIAG}" ] && log "diag_dump captured $(wc -c < "${DIAG}") bytes" \
-        || log "diag_dump: dumpsys telephony.registry produced nothing"
+    local raw=""
+    # 多级尝试: timeout 包裹 -> dumpsys 自带 -t -> 裸调; 每级都记录结果
+    if command -v timeout >/dev/null 2>&1; then
+        raw=$(timeout 6 dumpsys telephony.registry 2>&1)
+    else
+        raw=$(dumpsys -t 6 telephony.registry 2>&1 || dumpsys telephony.registry 2>&1)
+    fi
+    log "diag_dump: raw_len=${#raw} (context=$(id -un 2>/dev/null))"
+    if [ -n "${raw}" ]; then
+        printf '%s\n' "${raw}" \
+            | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id|ServiceState' \
+            > "${DIAG}" 2>/dev/null
+        [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 8192 > "${DIAG}" 2>/dev/null
+    else
+        # telephony.registry 全空时, 记录可用服务列表帮助定位
+        dumpsys -l 2>/dev/null | grep -i telephony > "${DIAG}" 2>/dev/null
+        [ -s "${DIAG}" ] || echo "dumpsys returned nothing (see netboost.log)" > "${DIAG}"
+    fi
 }
 
 wifi_rssi_of() {

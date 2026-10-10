@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.13",
-  "versionCode": 222,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.13/netboost-android14-6.1.zip",
-  "changelog": "v2.7.13: module.prop now carries updateJson so KSU/SukiSU manager can auto-check updates; lingxi status shows human-readable engine start time and uptime instead of raw epoch"
+  "version": "v2.7.14",
+  "versionCode": 223,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.14/netboost-android14-6.1.zip",
+  "changelog": "v2.7.14: diag_dump multi-fallback (timeout wrapper / dumpsys -t / bare call, logs raw length + uid to netboost.log, lists available telephony services when registry is empty); WebUI learning-details button now runs a live dumpsys telephony.registry sample for on-device diagnosis"
 }
