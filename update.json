@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.11",
-  "versionCode": 220,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.11/netboost-android14-6.1.zip",
-  "changelog": "v2.7.11: kernel-error button no longer matches bare \"module\" (was flooding output with unrelated haptics/driver logs); filter tightened to module-specific patterns"
+  "version": "v2.7.12",
+  "versionCode": 221,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.12/netboost-android14-6.1.zip",
+  "changelog": "v2.7.12: diag_dump hardened - retries every ~2.5min while learning is empty, falls back to raw 8KB telephony.registry dump when keyword filter matches nothing, logs capture result; fixes empty diag_dump.txt case"
 }

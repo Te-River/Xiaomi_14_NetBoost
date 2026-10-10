@@ -115,10 +115,15 @@ cell_of() {
 # 用于按真实格式修正解析 (限 4KB, 仅在 cellmap 尚未建立时写一次)。
 DIAG="${DATA_DIR}/diag_dump.txt"
 diag_dump() {
-    [ -s "${DIAG}" ] && return 0
-    timeout 4 dumpsys telephony.registry 2>/dev/null \
+    local raw
+    raw=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
+    printf '%s\n' "${raw}" \
         | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id|ServiceState' \
-        | head -c 4096 > "${DIAG}" 2>/dev/null
+        > "${DIAG}" 2>/dev/null
+    # 兜底: 过滤词一个都不中时, 落原始输出前 8KB, 保证总能看到真实格式
+    [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 8192 > "${DIAG}" 2>/dev/null
+    [ -s "${DIAG}" ] && log "diag_dump captured $(wc -c < "${DIAG}") bytes" \
+        || log "diag_dump: dumpsys telephony.registry produced nothing"
 }
 
 wifi_rssi_of() {
@@ -302,8 +307,16 @@ run_loop() {
     write_state
     log "daemon started (base=${current}, map=$( [ -s "${MAP}" ] && wc -l < "${MAP}" || echo 0) cells)"
     [ -s "${MAP}" ] || diag_dump
+    diag_cd=0
 
     while :; do
+        # 学习库为空且自抓样本缺失/为空时, 每 30 个周期(~2.5 分钟)重试一次
+        if [ ! -s "${MAP}" ] && [ ! -s "${DIAG}" ]; then
+            diag_cd=$((diag_cd + 1))
+            [ ${diag_cd} -ge 30 ] && { diag_dump; diag_cd=0; }
+        else
+            diag_cd=0
+        fi
         if screen_on; then interval="${LINGXI_INTERVAL_ON}"
         else interval="${LINGXI_INTERVAL_OFF}"; fi
 
