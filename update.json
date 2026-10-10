@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.8",
-  "versionCode": 217,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.8/netboost-android14-6.1.zip",
-  "changelog": "v2.7.8: WebUI now follows system light/dark mode; new on-demand latency/jitter/packet-loss tester (A/B tool: measure in stock mode vs tuned mode, auto-compares with last run); no background pinging"
+  "version": "v2.7.9",
+  "versionCode": 218,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.9/netboost-android14-6.1.zip",
+  "changelog": "v2.7.9: adopted publicly-documented tunables - tcp_frto=2 (spurious-RTO detection for elevator/handover stalls), tcp_notsent_lowat=16384 (lower interactive latency), crowd/weak scenarios now prefer CAKE qdisc (anti-bufferbloat, falls back to fq_codel); WebUI shows F-RTO/notsent_lowat/MPTCP support"
 }

@@ -40,6 +40,8 @@ LOG="${MODDIR}/netboost.log"
 TOUCHED="
 net/ipv4/tcp_congestion_control
 net/ipv4/tcp_slow_start_after_idle
+net/ipv4/tcp_frto
+net/ipv4/tcp_notsent_lowat
 net/ipv4/tcp_fastopen
 net/ipv4/tcp_mtu_probing
 net/ipv4/tcp_keepalive_time
@@ -87,12 +89,6 @@ scn_prefs() {      # congestion-control preference, first available wins
     esac
 }
 
-scn_qdisc() {
-    case "$1" in
-        crowd|weak) echo "fq_codel" ;;
-        *)          echo "fq" ;;
-    esac
-}
 
 set_algo() {       # set_algo <prefs...>; echoes the algo that took effect
     AVAIL="$(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
@@ -122,11 +118,28 @@ apply_scenario() {
     fi
 
     # qdisc
-    sysctlw net/core/default_qdisc "$(scn_qdisc "${scn}")" default_qdisc
+    # qdisc: crowd/weak prefer cake (built-in anti-bufferbloat AQM); fall
+    # back to fq_codel when the kernel lacks sch_cake
+    case "${scn}" in
+        crowd|weak)
+            if echo cake > /proc/sys/net/core/default_qdisc 2>/dev/null && \
+               [ "$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)" = "cake" ]; then
+                log "default_qdisc=cake"
+            else
+                sysctlw net/core/default_qdisc fq_codel default_qdisc
+            fi ;;
+        *) sysctlw net/core/default_qdisc fq default_qdisc ;;
+    esac
 
     # common tuning (all scenarios)
     # - keep cwnd after idle: no re-slow-start after app pauses
     sysctlw net/ipv4/tcp_slow_start_after_idle 0 tcp_slow_start_after_idle
+    # - F-RTO: detect spurious RTOs (roaming/elevator/weak-cell handovers)
+    #   so a transient stall does not collapse cwnd back to slow start
+    sysctlw net/ipv4/tcp_frto 2 tcp_frto
+    # - cap unsent backlog per socket: interactive apps (IM/game/pay) get
+    #   out of the kernel queue sooner -> lower latency under load
+    sysctlw net/ipv4/tcp_notsent_lowat 16384 tcp_notsent_lowat
     # - TCP Fast Open, client side only: full benefit for outbound
     #   connections while staying as close to the stock TCP fingerprint
     #   as possible (bit 2 "server" is pointless on a phone)

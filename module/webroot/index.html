@@ -165,7 +165,7 @@ echo =L; cat /proc/sys/net/ipv4/tcp_available_congestion_control;
 echo =Q; cat /proc/sys/net/core/default_qdisc;
 echo =S; cat $MOD/scenario 2>/dev/null;
 echo =M; for m in ${MODS.join(' ')}; do grep -q "^$m " /proc/modules && echo "$m 1" || echo "$m 0"; done;
-echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)";
+echo =T; for k in tcp_mtu_probing tcp_keepalive_time tcp_keepalive_intvl tcp_keepalive_probes tcp_fastopen tcp_slow_start_after_idle tcp_frto tcp_notsent_lowat; do echo "$k=$(cat /proc/sys/net/ipv4/$k 2>/dev/null)"; done; echo "rmem_max=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)"; echo "wmem_max=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)"; echo "mptcp=$(cat /proc/sys/net/mptcp/enabled 2>/dev/null || echo off)";
 echo =X; lx=0; [ -f $MOD/lingxi.pid ] && kill -0 $(cat $MOD/lingxi.pid) 2>/dev/null && lx=1;
 if [ "$lx" = 0 ] && [ -f $MOD/lingxi.sh ] && [ ! -f $DATA/lingxi.disabled ]; then sh $MOD/lingxi.sh start >/dev/null 2>&1 && lx=1; fi;
 echo "running=$lx";
@@ -233,6 +233,7 @@ function render(){
   // tuning table
   const TN = { tcp_mtu_probing:'MTU 黑洞探测', tcp_keepalive_time:'保活间隔(s)', tcp_keepalive_intvl:'保活探测间隔(s)',
                tcp_keepalive_probes:'保活次数', tcp_fastopen:'TCP FastOpen', tcp_slow_start_after_idle:'空闲后慢启动',
+               tcp_frto:'假超时探测 F-RTO', tcp_notsent_lowat:'发送积压上限(B)', mptcp:'MPTCP 内核支持',
                rmem_max:'接收缓冲上限', wmem_max:'发送缓冲上限' };
   document.getElementById('tuning').innerHTML =
     Object.keys(TN).filter(k=>S.tune[k]!==undefined).map(k=>`<tr><td>${TN[k]}</td><td>${S.tune[k]}</td></tr>`).join('');
