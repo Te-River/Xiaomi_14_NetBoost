@@ -74,13 +74,41 @@ iface_of() {
         | sed -n 's/.*dev \([a-z0-9]*\).*/\1/p' | head -n1
 }
 
+# 蜂窝数据源链: 部分上下文 (如开机 service.sh 派生的守护) 会被 SELinux
+# 拦掉 telephony.registry 的 service find ("Can't find service"), 而同一
+# 设备上 KSU exec 上下文能正常取到。逐级回退并缓存首个可用者; 全部失败
+# 时读 WebUI 代写的采样文件 (webui_signal.txt, 带时间戳防陈旧)。
+REG_SRC=""
+reg_dump() {
+    local src out=""
+    for src in ${REG_SRC:-_} telephony.registry phone; do
+        [ "${src}" = "_" ] && continue
+        out=$(timeout 4 dumpsys "${src}" 2>/dev/null)
+        case "${out}" in
+            *"Can't find service"*|"") out=""; continue ;;
+        esac
+        REG_SRC="${src}"
+        break
+    done
+    if [ -z "${out}" ] && [ -s "${DATA_DIR}/webui_signal.txt" ]; then
+        local ts now
+        ts=$(head -n1 "${DATA_DIR}/webui_signal.txt" 2>/dev/null)
+        now=$(date +%s)
+        case "${ts}" in
+            ''|*[!0-9]*) : ;;
+            *) [ $((now - ts)) -le 180 ] && out=$(tail -n +2 "${DATA_DIR}/webui_signal.txt" 2>/dev/null) ;;
+        esac
+    fi
+    echo "${out}"
+}
+
 # 蜂窝 RSRP: dumpsys telephony.registry, 多级解析, 失败输出空
 # NOTE: AOSP SignalStrength.toString() prints mLteRsrp=-95 / mNrRsrp=-105
 # (capital R!) -- a case-sensitive 'rsrp=' match silently misses them and
 # the whole engine goes blind. Match case-insensitively, NR first.
 rsrp_of() {
     local t v
-    t=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
+    t=$(reg_dump)
     for pat in 'mNrRsrp=[-0-9]+' 'mLteRsrp=[-0-9]+' \
                'rsrp[= ][ ]*[-0-9]+' 'dbm[= ][ ]*[-0-9]+'; do
         # iterate ALL matches: on dual-SIM phones the first entry can be
@@ -97,7 +125,7 @@ rsrp_of() {
 # NR '{ mMcc=460 mMnc=11 mNci=987654321 ... }' (HyperOS 同源, 字段一致)
 cell_of() {
     local t v
-    t=$(timeout 4 dumpsys telephony.registry 2>/dev/null) || return 0
+    t=$(reg_dump)
     for pat in 'mNci=[0-9a-fA-F]+' 'mCi=[0-9a-fA-F]+' \
                'nci=[0-9a-fA-F]+' '\bci=[0-9a-fA-F]+' \
                'mCid=[0-9a-fA-F]+' 'cid=[0-9a-fA-F]+'; do
@@ -115,21 +143,15 @@ cell_of() {
 # 用于按真实格式修正解析 (限 4KB, 仅在 cellmap 尚未建立时写一次)。
 DIAG="${DATA_DIR}/diag_dump.txt"
 diag_dump() {
-    local raw=""
-    # 多级尝试: timeout 包裹 -> dumpsys 自带 -t -> 裸调; 每级都记录结果
-    if command -v timeout >/dev/null 2>&1; then
-        raw=$(timeout 6 dumpsys telephony.registry 2>&1)
-    else
-        raw=$(dumpsys -t 6 telephony.registry 2>&1 || dumpsys telephony.registry 2>&1)
-    fi
-    log "diag_dump: raw_len=${#raw} (context=$(id -un 2>/dev/null))"
+    local raw
+    raw=$(reg_dump)
+    log "diag_dump: src=${REG_SRC:-none} raw_len=${#raw} (context=$(cat /proc/self/attr/current 2>/dev/null || id -un 2>/dev/null))"
     if [ -n "${raw}" ]; then
         printf '%s\n' "${raw}" \
             | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id|ServiceState' \
             > "${DIAG}" 2>/dev/null
         [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 8192 > "${DIAG}" 2>/dev/null
     else
-        # telephony.registry 全空时, 记录可用服务列表帮助定位
         dumpsys -l 2>/dev/null | grep -i telephony > "${DIAG}" 2>/dev/null
         [ -s "${DIAG}" ] || echo "dumpsys returned nothing (see netboost.log)" > "${DIAG}"
     fi
@@ -319,8 +341,9 @@ run_loop() {
     diag_cd=0
 
     while :; do
-        # 学习库为空且自抓样本缺失/为空时, 每 30 个周期(~2.5 分钟)重试一次
-        if [ ! -s "${MAP}" ] && [ ! -s "${DIAG}" ]; then
+        # 学习库为空且自抓样本缺失/无效(错误串)时, 每 30 个周期(~2.5 分钟)重试
+        if [ ! -s "${MAP}" ] && { [ ! -s "${DIAG}" ] || \
+             grep -q "Can't find service" "${DIAG}" 2>/dev/null; }; then
             diag_cd=$((diag_cd + 1))
             [ ${diag_cd} -ge 30 ] && { diag_dump; diag_cd=0; }
         else

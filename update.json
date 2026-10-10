@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.15",
-  "versionCode": 224,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.15/netboost-android14-6.1.zip",
-  "changelog": "v2.7.15: updateJson URL switched to jsDelivr CDN (fastly.jsdelivr.net) - raw.githubusercontent.com is unreachable on many CN networks, which blocked manager update checks"
+  "version": "v2.7.16",
+  "versionCode": 225,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.16/netboost-android14-6.1.zip",
+  "changelog": "v2.7.16: root-cause fix for blind engine - daemon context cannot find telephony.registry service (SELinux) while KSU exec can; engine now walks a source chain (telephony.registry -> dumpsys phone -> WebUI-written webui_signal.txt with 3min freshness), treats error-string samples as invalid and retries, logs chosen source + SELinux context"
 }

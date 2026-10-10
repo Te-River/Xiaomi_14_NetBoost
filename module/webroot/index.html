@@ -171,7 +171,8 @@ if [ "$lx" = 0 ] && [ -f $MOD/lingxi.sh ] && [ ! -f $DATA/lingxi.disabled ]; the
 echo "running=$lx";
 [ -f $DATA/lingxi.state ] && grep -E '^(scenario|candidate)=' $DATA/lingxi.state 2>/dev/null;
 echo "cells=$(wc -l < $DATA/cellmap.csv 2>/dev/null || echo 0)";
-echo "weak=$(awk -F, '$3>=3{n++}END{print n+0}' $DATA/cellmap.csv 2>/dev/null || echo 0)"`);
+echo "weak=$(awk -F, '$3>=3{n++}END{print n+0}' $DATA/cellmap.csv 2>/dev/null || echo 0)";
+{ date +%s; dumpsys telephony.registry 2>/dev/null | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id' | head -c 2048; } > $DATA/webui_signal.tmp 2>/dev/null && mv $DATA/webui_signal.tmp $DATA/webui_signal.txt;`);
     state = {
       ver:  section('\n'+out,'V').replace('version=',''),
       kern: section('\n'+out,'K'),
