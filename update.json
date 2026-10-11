@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.19",
-  "versionCode": 228,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.19/netboost-android14-6.1.zip",
-  "changelog": "v2.7.19: fix engine stuck on wifi scenario after leaving WiFi - when on a cellular interface but RSRP is unavailable (dumpsys blocked), fall back to generic boost scenario instead of keeping the stale wifi scenario forever"
+  "version": "v2.7.20",
+  "versionCode": 229,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.20/netboost-android14-6.1.zip",
+  "changelog": "v2.7.20: learning-details button now writes the live dumpsys sample straight into diag_dump.txt - real signal fields visible immediately on next click, no waiting for daemon retry"
 }
