@@ -144,6 +144,14 @@ cell_of() {
 DIAG="${DATA_DIR}/diag_dump.txt"
 diag_dump() {
     local raw
+    # 一次性失败原因记录 (仅在诊断时跑, 不刷日志): 若 sepolicy 补丁生效,
+    # 这里应输出 "last known state"; 仍被拦则记录确切错误串
+    local err
+    err=$(timeout 4 dumpsys telephony.registry 2>&1 | head -c 120)
+    case "${err}" in
+        *"last known state"*|*SignalStrength*|*mCellInfo*) : ;;
+        *) log "diag: telephony.registry -> ${err:-<empty>}" ;;
+    esac
     raw=$(reg_dump)
     log "diag_dump: src=${REG_SRC:-none} raw_len=${#raw} (context=$(cat /proc/self/attr/current 2>/dev/null || id -un 2>/dev/null))"
     if [ -n "${raw}" ]; then

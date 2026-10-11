@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.20",
-  "versionCode": 229,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.20/netboost-android14-6.1.zip",
-  "changelog": "v2.7.20: learning-details button now writes the live dumpsys sample straight into diag_dump.txt - real signal fields visible immediately on next click, no waiting for daemon retry"
+  "version": "v2.7.21",
+  "versionCode": 230,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.21/netboost-android14-6.1.zip",
+  "changelog": "v2.7.21: ship sepolicy.rule granting su/magisk domains service_manager find on radio_service + servicemanager binder - fixes dumpsys being blocked in the daemon context so cellular learning runs fully in background; diag_dump now logs the exact failure string for verification (requires reboot after install)"
 }

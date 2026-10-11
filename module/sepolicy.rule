@@ -1,0 +1,13 @@
+# NetBoost: allow the root daemon to look up telephony services via
+# servicemanager (dumpsys telephony.registry / phone). On some HyperOS
+# sepolicy profiles the su/magisk domains lack service_manager find for
+# radio_service, which makes the lingxi engine blind while the same
+# dumpsys call works from the manager's exec context.
+allow su radio_service service_manager find
+allow magisk radio_service service_manager find
+allow su servicemanager binder call
+allow su servicemanager binder transfer
+allow su servicemanager service_manager list
+allow magisk servicemanager binder call
+allow magisk servicemanager binder transfer
+allow magisk servicemanager service_manager list
