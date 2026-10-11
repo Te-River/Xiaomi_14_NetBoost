@@ -153,7 +153,7 @@ diag_dump() {
         [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 8192 > "${DIAG}" 2>/dev/null
     else
         dumpsys -l 2>/dev/null | grep -i telephony > "${DIAG}" 2>/dev/null
-        [ -s "${DIAG}" ] || echo "dumpsys returned nothing (see netboost.log)" > "${DIAG}"
+        [ -s "${DIAG}" ] || echo "等待 WebUI 采样: 打开 WebUI 页面并保持数秒, 或切到蜂窝网络后等待重试 (详见 netboost.log)" > "${DIAG}"
     fi
 }
 
@@ -341,9 +341,10 @@ run_loop() {
     diag_cd=0
 
     while :; do
-        # 学习库为空且自抓样本缺失/无效(错误串)时, 每 30 个周期(~2.5 分钟)重试
-        if [ ! -s "${MAP}" ] && { [ ! -s "${DIAG}" ] || \
-             grep -q "Can't find service" "${DIAG}" 2>/dev/null; }; then
+        # 学习库为空且自抓样本缺失/无效时, 每 30 个周期(~2.5 分钟)重试;
+        # 有效 = 样本里真的有 SignalStrength/CellIdentity/ServiceState 行
+        if [ ! -s "${MAP}" ] && \
+           ! grep -qiE 'SignalStrength|CellIdentity|ServiceState' "${DIAG}" 2>/dev/null; then
             diag_cd=$((diag_cd + 1))
             [ ${diag_cd} -ge 30 ] && { diag_dump; diag_cd=0; }
         else

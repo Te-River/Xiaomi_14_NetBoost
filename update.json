@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.17",
-  "versionCode": 226,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.17/netboost-android14-6.1.zip",
-  "changelog": "v2.7.17: updateJson now points at releases/latest/download/update.json (GitHub official latest-asset URL, no jsDelivr cache lag); update.json ships as a release asset from CI"
+  "version": "v2.7.18",
+  "versionCode": 227,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.18/netboost-android14-6.1.zip",
+  "changelog": "v2.7.18: diag retry no longer stuck - any sample lacking SignalStrength/CellIdentity/ServiceState is invalid and retried; learning-details button now also feeds the live dumpsys sample to the engine (webui_signal.txt)"
 }

@@ -299,6 +299,8 @@ sh ${MOD}/nb.sh apply "$s"`);
     refresh(); return;
   } else if (b.id === 'btnLxMap'){
     await runDiag(`DATA=/data/adb/netboost_data;
+{ date +%s; dumpsys telephony.registry 2>/dev/null | grep -iE 'SignalStrength|CellIdentity|ServiceState|Phone Id' | head -c 2048; } > $DATA/webui_signal.tmp 2>/dev/null && mv $DATA/webui_signal.tmp $DATA/webui_signal.txt;
+echo "== 已把本次实时样本喂给引擎 (webui_signal.txt, 引擎 3 分钟内有效)";
 echo "== 学习库: /data/adb/netboost_data/cellmap.csv (cell_id,hits,weak_hits,last_seen)";
 if [ -s $DATA/cellmap.csv ]; then
   sort -t, -k3 -nr $DATA/cellmap.csv | head -n 20
