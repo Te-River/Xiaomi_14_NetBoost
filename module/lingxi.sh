@@ -261,6 +261,13 @@ decide() {
         if [ -z "${candidate}" ] && map_is_weak "${cellid}"; then
             candidate="weak"; reason="learn: cell ${cellid} known-weak"
         fi
+        # --- 数据源全盲兜底: 接口已确认是蜂窝但 rsrp 不可用时, 至少切到
+        #     通用蜂窝场景, 避免离开 WiFi 后永远卡在 wifi (v2.7.18 及之前
+        #     的实际 bug: rsrp 空导致候选恒空 -> 永保旧场景) ---
+        if [ -z "${candidate}" ] && [ -z "${rsrp}" ]; then
+            candidate="boost"
+            reason="cellular fallback (rsrp unavailable, iface=${iface})"
+        fi
         # --- 当前状态识别 ---
         if [ -z "${candidate}" ] && [ -n "${rsrp}" ]; then
             if [ "${rsrp}" -le "${LINGXI_WEAK_RSRP}" ]; then
