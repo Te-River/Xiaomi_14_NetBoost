@@ -1,6 +1,6 @@
 {
-  "version": "v2.7.21",
-  "versionCode": 230,
-  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.21/netboost-android14-6.1.zip",
-  "changelog": "v2.7.21: ship sepolicy.rule granting su/magisk domains service_manager find on radio_service + servicemanager binder - fixes dumpsys being blocked in the daemon context so cellular learning runs fully in background; diag_dump now logs the exact failure string for verification (requires reboot after install)"
+  "version": "v2.7.22",
+  "versionCode": 231,
+  "zipUrl": "https://github.com/Te-River/Xiaomi_14_NetBoost/releases/download/v2.7.22/netboost-android14-6.1.zip",
+  "changelog": "v2.7.22: diag sample now prioritizes SignalStrength/CellIdentity/mCellInfo lines (the huge one-line ServiceState was crowding them out of the 4KB window); cell/rsrp parsing tolerates spaces around \"=\" for ROM variants"
 }

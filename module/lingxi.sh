@@ -109,7 +109,7 @@ reg_dump() {
 rsrp_of() {
     local t v
     t=$(reg_dump)
-    for pat in 'mNrRsrp=[-0-9]+' 'mLteRsrp=[-0-9]+' \
+    for pat in 'mNrRsrp[ ]*=[ ]*[-0-9]+' 'mLteRsrp[ ]*=[ ]*[-0-9]+' \
                'rsrp[= ][ ]*[-0-9]+' 'dbm[= ][ ]*[-0-9]+'; do
         # iterate ALL matches: on dual-SIM phones the first entry can be
         # the IDLE SIM's "unknown" sentinel (2147483647) - keep scanning
@@ -126,9 +126,9 @@ rsrp_of() {
 cell_of() {
     local t v
     t=$(reg_dump)
-    for pat in 'mNci=[0-9a-fA-F]+' 'mCi=[0-9a-fA-F]+' \
-               'nci=[0-9a-fA-F]+' '\bci=[0-9a-fA-F]+' \
-               'mCid=[0-9a-fA-F]+' 'cid=[0-9a-fA-F]+'; do
+    for pat in 'mNci[ ]*=[ ]*[0-9a-fA-F]+' 'mCi[ ]*=[ ]*[0-9a-fA-F]+' \
+               'nci[= ][ ]*[0-9a-fA-F]+' '\bci[= ][ ]*[0-9a-fA-F]+' \
+               'mCid[ ]*=[ ]*[0-9a-fA-F]+' 'cid[= ][ ]*[0-9a-fA-F]+'; do
         for v in $(echo "${t}" | grep -ioE "${pat}" | grep -oE '[0-9a-fA-F]+$'); do
             # skip the unknown sentinel and placeholder -1
             [ "${v}" != "2147483647" ] && [ "${v}" != "-1" ] && [ -n "${v}" ] && \
@@ -155,10 +155,12 @@ diag_dump() {
     raw=$(reg_dump)
     log "diag_dump: src=${REG_SRC:-none} raw_len=${#raw} (context=$(cat /proc/self/attr/current 2>/dev/null || id -un 2>/dev/null))"
     if [ -n "${raw}" ]; then
+        # 关键行优先 (mServiceState 单行 2.5KB+, 会把 4KB 窗口挤爆):
+        # SignalStrength/CellIdentity/mCellInfo 才含小区 ID 和 RSRP
         printf '%s\n' "${raw}" \
-            | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id|ServiceState' \
-            > "${DIAG}" 2>/dev/null
-        [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 8192 > "${DIAG}" 2>/dev/null
+            | grep -iE 'SignalStrength|CellIdentity|mCellInfo|Phone Id' \
+            | head -c 8192 > "${DIAG}" 2>/dev/null
+        [ -s "${DIAG}" ] || printf '%s\n' "${raw}" | head -c 16384 > "${DIAG}" 2>/dev/null
     else
         dumpsys -l 2>/dev/null | grep -i telephony > "${DIAG}" 2>/dev/null
         [ -s "${DIAG}" ] || echo "等待 WebUI 采样: 打开 WebUI 页面并保持数秒, 或切到蜂窝网络后等待重试 (详见 netboost.log)" > "${DIAG}"
